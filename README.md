@@ -4,6 +4,15 @@ A premium, drag-to-set **countdown timer card** for [Home Assistant](https://www
 
 Instead of fixed 30 / 45 / 60-minute buttons, you just **drag the bar to any duration** and release — and your action runs exactly then.
 
+<p align="center">
+  <img src="docs/horizontal-bar.png" alt="Horizontal bar — running" width="47%" />
+  &nbsp;
+  <img src="docs/bar-idle-slide.png" alt="Horizontal bar — idle, with the Slide hint" width="47%" />
+</p>
+<p align="center">
+  <img src="docs/vertical.png" alt="Vertical liquid design" width="40%" />
+</p>
+
 ---
 
 - **Shared** — everyone looking at the dashboard sees the exact same live countdown.
