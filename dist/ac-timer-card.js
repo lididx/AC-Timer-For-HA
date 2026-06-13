@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -436,7 +436,7 @@ const DESIGNS = {
         border:1px solid var(--act-btn-border); box-shadow:0 2px 6px rgba(0,0,0,.3); }
       .acd-stepper .start { display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
         border:none; border-radius:18px; padding:14px; font-size:1rem; font-weight:600; cursor:pointer;
-        font-family:inherit; color:#08120A;
+        font-family:inherit; color:#0B1020;
         background:linear-gradient(135deg, var(--act-accent-strong), var(--act-accent));
         box-shadow:0 6px 18px var(--act-accent-glow); }
       .acd-stepper .start ha-icon { --mdc-icon-size:20px; }
@@ -492,21 +492,22 @@ const DESIGNS = {
 // Theme defaults + shared styles -------------------------------------------
 const BASE_STYLES = `
   :host {
-    --act-card-grad-start:#1D211D;
-    --act-card-grad-end:#101310;
-    --act-card-border:rgba(255,255,255,0.12);
-    --act-text:#F5F7F2;
-    --act-text-2:#9EA69A;
-    --act-text-muted:#6F776E;
-    --act-accent:#7ED957;
-    --act-accent-strong:#A6FF4D;
+    /* Default theme — tuned to match the AC dashboard (dark navy, cool blue-violet). */
+    --act-card-grad-start:#1B2030;
+    --act-card-grad-end:#0E1018;
+    --act-card-border:rgba(255,255,255,0.10);
+    --act-text:#ECEFF7;
+    --act-text-2:#9AA2B8;
+    --act-text-muted:#6B7287;
+    --act-accent:#7B82E6;
+    --act-accent-strong:#ADB4FF;
     --act-accent-glow:color-mix(in srgb, var(--act-accent) 45%, transparent);
-    --act-track:rgba(255,255,255,0.12);
-    --act-track-dark:rgba(255,255,255,0.07);
-    --act-btn-bg:rgba(255,255,255,0.06);
-    --act-btn-border:rgba(255,255,255,0.14);
-    --act-warning:#FFD166;
-    --act-danger:#FF5C5C;
+    --act-track:rgba(255,255,255,0.10);
+    --act-track-dark:rgba(255,255,255,0.05);
+    --act-btn-bg:rgba(255,255,255,0.05);
+    --act-btn-border:rgba(255,255,255,0.12);
+    --act-warning:#F2C14E;
+    --act-danger:#E2685F;
     --act-active:var(--act-accent);
   }
   ha-card {
@@ -1167,6 +1168,6 @@ window.customCards.push({
 
 console.info(
   `%c AC-TIMER-CARD %c v${CARD_VERSION} `,
-  "color: white; background: #7ED957; font-weight: 700;",
-  "color: #7ED957; background: #1c1c1c;"
+  "color: white; background: #7B82E6; font-weight: 700;",
+  "color: #7B82E6; background: #1c1c1c;"
 );
