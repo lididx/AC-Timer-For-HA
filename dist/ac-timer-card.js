@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.14.1";
+const CARD_VERSION = "1.15.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -30,6 +30,8 @@ const DEFAULT_CONFIG = {
   scale: "even", // position<->minutes mapping: even|short|strong
   slide_hint: "Slide ←",
   slide_hint_show: true,
+  slide_hint_effect: "shimmer", // none|fade|shimmer|wipe|glow
+  slide_hint_speed: 3, // seconds per loop
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
@@ -287,12 +289,26 @@ const DESIGNS = {
       .acd-bar .cap-hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
         pointer-events:none; z-index:2; opacity:0; transition:opacity .3s; }
       .acd-bar.idle .cap-hint { opacity:1; }
-      .acd-bar .cap-hint span { font-size:.78rem; letter-spacing:4px; font-weight:600;
-        background:linear-gradient(90deg, color-mix(in srgb, var(--act-text-2) 25%, transparent) 0%,
-          var(--act-text) 50%, color-mix(in srgb, var(--act-text-2) 25%, transparent) 100%);
-        background-size:220% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
-        animation:cap-shim 1.5s linear infinite; }
+      .acd-bar .cap-hint span { font-size:.78rem; letter-spacing:4px; font-weight:600; color:var(--act-text-2); }
+      /* Shimmer — bright sweep travels right-to-left across dim text */
+      .acd-bar .hint-shimmer span { color:transparent; -webkit-background-clip:text; background-clip:text;
+        background:linear-gradient(90deg, color-mix(in srgb, var(--act-text-2) 22%, transparent) 0%,
+          var(--act-text) 50%, color-mix(in srgb, var(--act-text-2) 22%, transparent) 100%);
+        background-size:220% 100%; animation:cap-shim linear infinite; }
       @keyframes cap-shim { 0%{background-position:220% 0} 100%{background-position:-220% 0} }
+      /* Fade — gentle opacity pulse */
+      .acd-bar .hint-fade span { animation:cap-fade ease-in-out infinite; }
+      @keyframes cap-fade { 0%,100%{opacity:.18} 50%{opacity:.7} }
+      /* Wipe — soft reveal sweeping right-to-left */
+      .acd-bar .hint-wipe span { color:var(--act-text); -webkit-mask:linear-gradient(90deg,#000 0 38%,transparent 62%);
+        mask:linear-gradient(90deg,#000 0 38%,transparent 62%); -webkit-mask-size:260% 100%; mask-size:260% 100%;
+        animation:cap-wipe linear infinite; }
+      @keyframes cap-wipe { 0%{-webkit-mask-position:0 0;mask-position:0 0} 100%{-webkit-mask-position:-260% 0;mask-position:-260% 0} }
+      /* Glow — soft glowing breath */
+      .acd-bar .hint-glow span { color:var(--act-text); animation:cap-glow ease-in-out infinite; }
+      @keyframes cap-glow { 0%,100%{opacity:.3;text-shadow:none} 50%{opacity:.85;text-shadow:0 0 9px var(--act-accent-glow)} }
+      /* None — static dim text */
+      .acd-bar .hint-none span { opacity:.4; }
       .acd-bar .ends-row { display:flex; justify-content:center; margin-top:14px; }
       .acd-bar .ends-box { display:inline-flex; align-items:center; gap:10px; padding:9px 16px; border-radius:16px;
         background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
@@ -309,7 +325,7 @@ const DESIGNS = {
           <div class="cap-handle h-${config.handle_style || "pill"}" id="dot"></div>
           ${
             config.slide_hint_show !== false && config.slide_hint
-              ? `<div class="cap-hint"><span dir="auto">${escapeHtml(config.slide_hint)}</span></div>`
+              ? `<div class="cap-hint hint-${config.slide_hint_effect || "shimmer"}"><span dir="auto" style="animation-duration:${Number(config.slide_hint_speed) || 3}s">${escapeHtml(config.slide_hint)}</span></div>`
               : ""
           }
         </div>
@@ -1084,6 +1100,20 @@ const EDITOR_SCHEMA = [
           { name: "slide_hint", selector: { text: {} } },
         ],
       },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "slide_hint_effect", selector: { select: { mode: "dropdown", options: [
+            { value: "none", label: "None" },
+            { value: "fade", label: "Fade" },
+            { value: "shimmer", label: "Shimmer" },
+            { value: "wipe", label: "Wipe" },
+            { value: "glow", label: "Glow" },
+          ] } } },
+          { name: "slide_hint_speed", selector: { number: { min: 0.5, max: 8, step: 0.5, mode: "slider", unit_of_measurement: "s" } } },
+        ],
+      },
       { name: "ends_show", selector: { boolean: {} } },
       { name: "ends_label", selector: { text: {} } },
       {
@@ -1198,6 +1228,8 @@ const EDITOR_LABELS = {
   scale: "Scale",
   slide_hint_show: "Show hint",
   slide_hint: "Hint text",
+  slide_hint_effect: "Hint effect",
+  slide_hint_speed: "Loop time",
   ends_label: "“Ends at” text",
   ends_icon_show: "Show icon",
   ends_icon: "Icon",
@@ -1240,7 +1272,9 @@ const EDITOR_HELPERS = {
   handle_style: "Marker on the bar's leading edge (Horizontal bar).",
   scale: "How minutes map to the bar. 'Favor short' makes short times take up more of the bar (good for a wide 0–240 range).",
   slide_hint_show: "Show a faint hint in the empty bar.",
-  slide_hint: "Faint shimmering hint shown when idle (e.g. “Slide ←”).",
+  slide_hint: "Faint hint shown when idle (e.g. “Slide ←”).",
+  slide_hint_effect: "Animation style of the hint.",
+  slide_hint_speed: "Seconds per loop (higher = slower).",
   ends_label: "Text before the end time (e.g. “Ends at”, or Hebrew like “כיבוי בשעה”).",
   ends_icon_show: "Show the icon next to the end time.",
   ends_icon: "Icon shown next to the end time.",
