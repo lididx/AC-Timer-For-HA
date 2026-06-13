@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.6.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -247,6 +247,7 @@ const DESIGNS = {
         ${headHtml(config)}
         <div class="cap" id="drag">
           <div class="cap-track"></div>
+          ${fxHtml(config)}
           <div class="cap-fill" id="fill"><div class="cap-hl"></div></div>
           <div class="cap-dot" id="dot"></div>
         </div>
@@ -315,7 +316,8 @@ const DESIGNS = {
         ${headHtml(config)}
         <div class="vstage">
           <div class="vessel" id="drag">
-            <div class="liquid" id="fill"></div>
+              <div class="liquid" id="fill"></div>
+            ${fxHtml(config)}
           </div>
           <div class="vscale"><span>Full</span><span>Half</span><span>Low</span></div>
         </div>
@@ -371,6 +373,7 @@ const DESIGNS = {
       return `<div class="acd acd-dial">
         ${headHtml(config)}
         <div class="dial-wrap" id="drag">
+          ${fxHtml(config)}
           <svg viewBox="0 0 200 200">
             ${ticks}
             <path class="d-track" d="${d}"></path>
@@ -441,7 +444,7 @@ const DESIGNS = {
       return `<div class="acd acd-stepper">
         ${headHtml(config)}
         <div class="time" id="big">00:00:00</div>
-        <div class="sline"><div class="sline-fill" id="fill"></div><div class="sline-dot" id="dot"></div></div>
+        <div class="sline">${fxHtml(config)}<div class="sline-fill" id="fill"></div><div class="sline-dot" id="dot"></div></div>
         <div class="controls">
           <button class="step-btn" id="minus" aria-label="Decrease time">−</button>
           <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}" aria-label="Set minutes">
@@ -554,30 +557,37 @@ const BASE_STYLES = `
   @keyframes actwave { 0%{transform:translateX(0)} 100%{transform:translateX(33%)} }
 
   /* ---- Ambient style overlays (apply to any design) ---- */
-  .fx { position:absolute; inset:0; overflow:hidden; border-radius:inherit; pointer-events:none; z-index:0; }
+  /* The FX layer lives INSIDE each design's slider/track element and is
+     clipped to its shape. Effects are host-relative so they fit any size. */
+  .fx { position:absolute; inset:0; overflow:hidden; border-radius:inherit; pointer-events:none; }
   .fx .p { position:absolute; }
-  /* Bubbles — soft accent bubbles rising up */
-  .fx-bubbles .p { bottom:-14px; width:9px; height:9px; border-radius:50%; background:var(--act-accent);
-    opacity:.16; filter:blur(.5px); animation:fxrise linear infinite; }
-  @keyframes fxrise { 0%{transform:translateY(0) scale(.6);opacity:0} 12%{opacity:.2} 100%{transform:translateY(-440px) scale(1);opacity:0} }
+  /* Bubbles — accent bubbles rising through the slider */
+  .fx-bubbles .p { width:8px; height:8px; border-radius:50%; background:var(--act-accent);
+    opacity:.22; filter:blur(.4px); animation:fxrise linear infinite; }
+  @keyframes fxrise { 0%{bottom:-20%;opacity:0} 20%{opacity:.28} 100%{bottom:120%;opacity:0} }
   /* Flowing air — drifting breeze streaks (AC running) */
-  .fx-air .p { left:-40%; height:3px; border-radius:3px; opacity:.22; filter:blur(.6px);
+  .fx-air .p { height:3px; border-radius:3px; opacity:.3; filter:blur(.5px);
     background:linear-gradient(90deg, transparent, var(--act-accent), transparent); animation:fxair linear infinite; }
-  @keyframes fxair { 0%{left:-40%;opacity:0} 12%{opacity:.28} 88%{opacity:.28} 100%{left:115%;opacity:0} }
+  @keyframes fxair { 0%{left:-45%;opacity:0} 15%{opacity:.4} 85%{opacity:.4} 100%{left:120%;opacity:0} }
   /* Aurora — slow shifting gradient sheen */
-  .fx-aurora .p { width:70%; height:70%; border-radius:50%; filter:blur(34px); opacity:.18; animation:fxaurora ease-in-out infinite; }
-  .fx-aurora .p:nth-child(1){ top:-20%; left:-10%; background:var(--act-accent); animation-duration:11s; }
-  .fx-aurora .p:nth-child(2){ bottom:-25%; right:-10%; background:var(--act-accent-strong); animation-duration:14s; animation-delay:-3s; }
-  .fx-aurora .p:nth-child(3){ top:20%; right:10%; background:var(--act-accent); animation-duration:17s; animation-delay:-7s; }
-  @keyframes fxaurora { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(12%,8%) scale(1.18)} }
-  /* Floating particles — ambient dust motes */
+  .fx-aurora .p { width:80%; height:170%; border-radius:50%; filter:blur(18px); opacity:.25; animation:fxaurora ease-in-out infinite; }
+  .fx-aurora .p:nth-child(1){ top:-35%; left:-12%; background:var(--act-accent); animation-duration:11s; }
+  .fx-aurora .p:nth-child(2){ bottom:-40%; right:-12%; background:var(--act-accent-strong); animation-duration:14s; animation-delay:-3s; }
+  .fx-aurora .p:nth-child(3){ top:0; right:15%; background:var(--act-accent); animation-duration:17s; animation-delay:-7s; }
+  @keyframes fxaurora { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(14%,6%) scale(1.2)} }
+  /* Floating particles — ambient motes */
   .fx-particles .p { width:4px; height:4px; border-radius:50%; background:var(--act-accent-strong);
-    opacity:.18; animation:fxfloat ease-in-out infinite; }
-  @keyframes fxfloat { 0%{transform:translate(0,0);opacity:0} 20%{opacity:.25} 80%{opacity:.25} 100%{transform:translate(14px,-120px);opacity:0} }
+    opacity:.22; animation:fxfloat ease-in-out infinite; }
+  @keyframes fxfloat { 0%{transform:translate(0,0);opacity:0} 25%{opacity:.3} 75%{opacity:.3} 100%{transform:translate(10px,-26px);opacity:0} }
   /* Frost — soft specks drifting down (cool air) */
-  .fx-frost .p { top:-12px; width:6px; height:6px; border-radius:50%; background:#fff; opacity:.16; filter:blur(.4px);
+  .fx-frost .p { width:6px; height:6px; border-radius:50%; background:#fff; opacity:.2; filter:blur(.4px);
     animation:fxfall linear infinite; }
-  @keyframes fxfall { 0%{transform:translate(0,0);opacity:0} 12%{opacity:.22} 100%{transform:translate(16px,440px);opacity:0} }
+  @keyframes fxfall { 0%{top:-20%;opacity:0} 20%{opacity:.26} 100%{top:120%;opacity:0} }
+  /* Per-design layering: keep the fill/handle above the ambient layer */
+  .acd-bar .cap-track { z-index:0; } .acd-bar .fx { z-index:2; } .acd-bar .cap-fill { z-index:1; } .acd-bar .cap-dot { z-index:3; }
+  .acd-vertical .liquid { z-index:1; } .acd-vertical .fx { z-index:2; }
+  .acd-dial .fx { z-index:0; border-radius:50%; } .acd-dial svg { position:relative; z-index:1; } .acd-dial .center { z-index:2; }
+  .acd-stepper .sline-fill { z-index:1; } .acd-stepper .fx { z-index:2; } .acd-stepper .sline-dot { z-index:3; }
 
   @media (prefers-reduced-motion: reduce) {
     .cap-fill,.cap-dot,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
@@ -837,7 +847,6 @@ class AcTimerCard extends HTMLElement {
     this._design = design;
     this.shadowRoot.innerHTML = `<style>${BASE_STYLES}\n${design.css}</style>
       <ha-card>
-        ${fxHtml(this._config)}
         <div class="hint" id="hint" style="display:none"></div>
         <div id="root">
           ${design.html(this._config)}
