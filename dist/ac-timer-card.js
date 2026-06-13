@@ -17,10 +17,11 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
+  style: "none",
   title: "AC Shutoff Timer",
   label: "Runs in",
   direction: "rtl", // rtl = 0 on the right (default), ltr = 0 on the left
@@ -147,6 +148,39 @@ function barEndsHtml(config) {
 function statusHtml() {
   return `<div class="status"><span class="dot" id="sdot"></span><span id="stext"></span></div>`;
 }
+
+// Ambient animation styles, layered behind the timer for ANY design.
+const STYLES = ["none", "bubbles", "air", "aurora", "particles", "frost"];
+const STYLE_LABELS = {
+  none: "None",
+  bubbles: "Bubbles",
+  air: "Flowing air",
+  aurora: "Aurora glow",
+  particles: "Floating particles",
+  frost: "Frost",
+};
+function fxHtml(config) {
+  const s = config.style || "none";
+  if (s === "none" || !STYLES.includes(s)) return "";
+  const span = (style) => `<span class="p" style="${style}"></span>`;
+  let inner = "";
+  if (s === "bubbles") {
+    for (let i = 0; i < 7; i++)
+      inner += span(`left:${8 + i * 13}%;animation-delay:${(i * 0.7).toFixed(1)}s;animation-duration:${4 + (i % 3)}s`);
+  } else if (s === "air") {
+    for (let i = 0; i < 5; i++)
+      inner += span(`top:${12 + i * 18}%;width:${34 + i * 6}%;animation-delay:${(i * 0.8).toFixed(1)}s;animation-duration:${5 + (i % 3)}s`);
+  } else if (s === "aurora") {
+    inner = `${span("")}${span("")}${span("")}`;
+  } else if (s === "particles") {
+    for (let i = 0; i < 12; i++)
+      inner += span(`left:${(i * 8.3) % 100}%;top:${(i * 17) % 100}%;animation-delay:${(i * 0.5).toFixed(1)}s;animation-duration:${6 + (i % 4)}s`);
+  } else if (s === "frost") {
+    for (let i = 0; i < 9; i++)
+      inner += span(`left:${(i * 11) % 100}%;animation-delay:${(i * 0.6).toFixed(1)}s;animation-duration:${6 + (i % 3)}s`);
+  }
+  return `<div class="fx fx-${s}">${inner}</div>`;
+}
 function cancelHtml() {
   return `<div class="cancel-wrap"><button class="btn-cancel" id="cancel" aria-label="Cancel timer">Cancel</button></div>`;
 }
@@ -250,10 +284,6 @@ const DESIGNS = {
         box-shadow:0 0 16px var(--act-accent-glow); transition:height .5s ease; }
       .acd-vertical .liquid::before { content:""; position:absolute; top:-9px; left:-25%; width:150%; height:18px;
         border-radius:45%; background:var(--act-active); animation:actwave 4s linear infinite; }
-      .acd-vertical .bubble { position:absolute; bottom:6px; width:6px; height:6px; border-radius:50%;
-        background:rgba(255,255,255,.5); animation:actbub 4.5s ease-in infinite; }
-      .acd-vertical .b2 { left:40%; width:4px; height:4px; animation-delay:1.4s; animation-duration:5.5s; }
-      .acd-vertical .b3 { left:65%; width:5px; height:5px; animation-delay:2.6s; animation-duration:6s; }
       .acd-vertical .vscale { display:flex; flex-direction:column; justify-content:space-between;
         padding:6px 0; font-size:.72rem; color:var(--act-text-muted); }
       .acd-vertical .vscale span { display:flex; align-items:center; gap:6px; }
@@ -264,9 +294,7 @@ const DESIGNS = {
         ${headHtml(config)}
         <div class="vstage">
           <div class="vessel" id="drag">
-            <div class="liquid" id="fill">
-              <span class="bubble b1"></span><span class="bubble b2"></span><span class="bubble b3"></span>
-            </div>
+            <div class="liquid" id="fill"></div>
           </div>
           <div class="vscale"><span>Full</span><span>Half</span><span>Low</span></div>
         </div>
@@ -478,13 +506,16 @@ const BASE_STYLES = `
     --act-active:var(--act-accent);
   }
   ha-card {
+    position:relative;
     background:linear-gradient(160deg, var(--act-card-grad-start), var(--act-card-grad-end));
     border:1px solid var(--act-card-border);
     border-radius:24px;
     padding:26px;
     box-shadow:0 10px 34px rgba(0,0,0,0.38);
     color:var(--act-text);
+    overflow:hidden;
   }
+  #root { position:relative; z-index:1; }
   .head { margin-bottom:4px; }
   .title { font-size:1.05rem; font-weight:700; color:var(--act-text); }
   .label { font-size:.82rem; font-weight:500; color:var(--act-text-2); margin-top:2px; }
@@ -513,10 +544,38 @@ const BASE_STYLES = `
   .acd.pulse .sline-fill, .acd.pulse .sline-dot { animation:actpulse 1s ease-in-out infinite; }
   @keyframes actpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
   @keyframes actwave { 0%{transform:translateX(0)} 100%{transform:translateX(33%)} }
-  @keyframes actbub { 0%{transform:translateY(0); opacity:0} 15%{opacity:.7} 100%{transform:translateY(-180px); opacity:0} }
+
+  /* ---- Ambient style overlays (apply to any design) ---- */
+  .fx { position:absolute; inset:0; overflow:hidden; border-radius:inherit; pointer-events:none; z-index:0; }
+  .fx .p { position:absolute; }
+  /* Bubbles — soft accent bubbles rising up */
+  .fx-bubbles .p { bottom:-14px; width:9px; height:9px; border-radius:50%; background:var(--act-accent);
+    opacity:.16; filter:blur(.5px); animation:fxrise linear infinite; }
+  @keyframes fxrise { 0%{transform:translateY(0) scale(.6);opacity:0} 12%{opacity:.2} 100%{transform:translateY(-440px) scale(1);opacity:0} }
+  /* Flowing air — drifting breeze streaks (AC running) */
+  .fx-air .p { left:-40%; height:3px; border-radius:3px; opacity:.22; filter:blur(.6px);
+    background:linear-gradient(90deg, transparent, var(--act-accent), transparent); animation:fxair linear infinite; }
+  @keyframes fxair { 0%{left:-40%;opacity:0} 12%{opacity:.28} 88%{opacity:.28} 100%{left:115%;opacity:0} }
+  /* Aurora — slow shifting gradient sheen */
+  .fx-aurora .p { width:70%; height:70%; border-radius:50%; filter:blur(34px); opacity:.18; animation:fxaurora ease-in-out infinite; }
+  .fx-aurora .p:nth-child(1){ top:-20%; left:-10%; background:var(--act-accent); animation-duration:11s; }
+  .fx-aurora .p:nth-child(2){ bottom:-25%; right:-10%; background:var(--act-accent-strong); animation-duration:14s; animation-delay:-3s; }
+  .fx-aurora .p:nth-child(3){ top:20%; right:10%; background:var(--act-accent); animation-duration:17s; animation-delay:-7s; }
+  @keyframes fxaurora { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(12%,8%) scale(1.18)} }
+  /* Floating particles — ambient dust motes */
+  .fx-particles .p { width:4px; height:4px; border-radius:50%; background:var(--act-accent-strong);
+    opacity:.18; animation:fxfloat ease-in-out infinite; }
+  @keyframes fxfloat { 0%{transform:translate(0,0);opacity:0} 20%{opacity:.25} 80%{opacity:.25} 100%{transform:translate(14px,-120px);opacity:0} }
+  /* Frost — soft specks drifting down (cool air) */
+  .fx-frost .p { top:-12px; width:6px; height:6px; border-radius:50%; background:#fff; opacity:.16; filter:blur(.4px);
+    animation:fxfall linear infinite; }
+  @keyframes fxfall { 0%{transform:translate(0,0);opacity:0} 12%{opacity:.22} 100%{transform:translate(16px,440px);opacity:0} }
+
   @media (prefers-reduced-motion: reduce) {
-    .cap-fill,.cap-dot,.liquid,.d-prog,.a-prog,.sline-fill,.sline-dot { transition:none !important; }
-    .acd.pulse *, .liquid::before, .bubble { animation:none !important; }
+    .cap-fill,.cap-dot,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
+    .acd.pulse .cap-dot,.acd.pulse .cap-fill,.acd.pulse .liquid,.acd.pulse .d-prog,.acd.pulse .d-knob,
+    .acd.pulse .sline-fill,.acd.pulse .sline-dot,
+    .liquid::before, .fx .p { animation:none !important; }
   }
 `;
 
@@ -770,6 +829,7 @@ class AcTimerCard extends HTMLElement {
     this._design = design;
     this.shadowRoot.innerHTML = `<style>${BASE_STYLES}\n${design.css}</style>
       <ha-card>
+        ${fxHtml(this._config)}
         <div class="hint" id="hint" style="display:none"></div>
         <div id="root">${design.html(this._config)}</div>
       </ha-card>`;
@@ -835,43 +895,66 @@ customElements.define("ac-timer-card", AcTimerCard);
  * Visual config editor
  * ============================================================ */
 const DESIGN_OPTIONS = Object.entries(DESIGNS).map(([value, d]) => ({ value, label: d.label }));
+const STYLE_OPTIONS = STYLES.map((value) => ({ value, label: STYLE_LABELS[value] }));
 
+// Editor layout: a few essentials up top, the rest grouped into clearly
+// titled, collapsible sections (the convention for HA custom-card editors).
 const EDITOR_SCHEMA = [
   { name: "timer_entity", selector: { entity: { domain: "timer" } } },
-  { name: "design", selector: { select: { mode: "dropdown", options: DESIGN_OPTIONS } } },
   {
     name: "",
     type: "grid",
     schema: [
-      { name: "title", selector: { text: {} } },
-      { name: "label", selector: { text: {} } },
+      { name: "design", selector: { select: { mode: "dropdown", options: DESIGN_OPTIONS } } },
+      { name: "style", selector: { select: { mode: "dropdown", options: STYLE_OPTIONS } } },
     ],
   },
-  { name: "direction", selector: { select: { mode: "dropdown", options: [
-    { value: "rtl", label: "Right → Left" },
-    { value: "ltr", label: "Left → Right" },
-  ] } } },
   { name: "finish_action", selector: { action: {} } },
   {
-    name: "",
-    type: "grid",
+    type: "expandable",
+    title: "Appearance",
+    icon: "mdi:eye-outline",
     schema: [
-      { name: "max_minutes", selector: { number: { min: 1, max: 1440, mode: "box", unit_of_measurement: "min" } } },
-      { name: "min_minutes", selector: { number: { min: 1, max: 240, mode: "box", unit_of_measurement: "min" } } },
-      { name: "step", selector: { number: { min: 1, max: 60, mode: "box", unit_of_measurement: "min" } } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "title", selector: { text: {} } },
+          { name: "label", selector: { text: {} } },
+        ],
+      },
+      { name: "direction", selector: { select: { mode: "dropdown", options: [
+        { value: "rtl", label: "Right → Left" },
+        { value: "ltr", label: "Left → Right" },
+      ] } } },
+      { name: "ends_show", selector: { boolean: {} } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "ends_width", selector: { select: { mode: "dropdown", options: [
+            { value: "chip", label: "Small chip" },
+            { value: "full", label: "Full width" },
+          ] } } },
+          { name: "ends_size", selector: { number: { min: 10, max: 48, mode: "slider", unit_of_measurement: "px" } } },
+        ],
+      },
     ],
   },
   {
     type: "expandable",
-    title: "“Ends at” display",
-    icon: "mdi:calendar-clock",
+    title: "Timing",
+    icon: "mdi:timer-cog-outline",
     schema: [
-      { name: "ends_show", selector: { boolean: {} } },
-      { name: "ends_width", selector: { select: { mode: "dropdown", options: [
-        { value: "chip", label: "Small chip" },
-        { value: "full", label: "Full width" },
-      ] } } },
-      { name: "ends_size", selector: { number: { min: 10, max: 48, mode: "slider", unit_of_measurement: "px" } } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "max_minutes", selector: { number: { min: 1, max: 1440, mode: "box", unit_of_measurement: "min" } } },
+          { name: "min_minutes", selector: { number: { min: 1, max: 240, mode: "box", unit_of_measurement: "min" } } },
+          { name: "step", selector: { number: { min: 1, max: 60, mode: "box", unit_of_measurement: "min" } } },
+        ],
+      },
     ],
   },
   {
@@ -897,6 +980,7 @@ const EDITOR_SCHEMA = [
 const EDITOR_LABELS = {
   timer_entity: "Timer entity",
   design: "Design",
+  style: "Style",
   title: "Title",
   label: "Label",
   direction: "Direction",
@@ -922,7 +1006,8 @@ const EDITOR_LABELS = {
 
 const EDITOR_HELPERS = {
   timer_entity: "The countdown timer this card controls. Pick one or create it in Settings → Helpers.",
-  design: "Visual style of the timer.",
+  design: "Shape of the timer (bar, ring, etc.).",
+  style: "Ambient animation behind the timer.",
   title: "Name shown on the card.",
   label: "Small label under the title (e.g. Runs in).",
   direction: "Which side is zero for the bar fill.",
