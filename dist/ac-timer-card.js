@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.11.1";
+const CARD_VERSION = "1.12.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -177,8 +177,8 @@ function fxHtml(config) {
     for (let i = 0; i < 7; i++)
       inner += span(`left:${8 + i * 13}%;animation-delay:${(i * 0.7).toFixed(1)}s;animation-duration:${4 + (i % 3)}s`);
   } else if (s === "air") {
-    for (let i = 0; i < 5; i++)
-      inner += span(`top:${12 + i * 18}%;width:${34 + i * 6}%;animation-delay:${(i * 0.8).toFixed(1)}s;animation-duration:${5 + (i % 3)}s`);
+    for (let i = 0; i < 7; i++)
+      inner += span(`top:${8 + i * 12}%;width:${40 + (i % 3) * 12}%;animation-delay:${(i * 0.5).toFixed(1)}s;animation-duration:${3.5 + (i % 3) * 0.8}s`);
   } else if (s === "aurora") {
     inner = `${span("")}${span("")}${span("")}`;
   } else if (s === "particles") {
@@ -516,8 +516,8 @@ const BASE_STYLES = `
     --act-text:#EBEBF3;
     --act-text-2:#AEB6C6;
     --act-text-muted:#7E879A;
-    --act-accent:#7B82E6;
-    --act-accent-strong:#ADB4FF;
+    --act-accent:#9B6FD4;
+    --act-accent-strong:#C9A8FF;
     --act-accent-glow:color-mix(in srgb, var(--act-accent) 45%, transparent);
     --act-track:rgba(255,255,255,0.10);
     --act-track-dark:rgba(255,255,255,0.05);
@@ -590,10 +590,12 @@ const BASE_STYLES = `
   .fx-bubbles .p { width:8px; height:8px; border-radius:50%; background:var(--act-accent);
     opacity:.22; filter:blur(.4px); animation:fxrise linear infinite; }
   @keyframes fxrise { 0%{bottom:-20%;opacity:0} 20%{opacity:.28} 100%{bottom:120%;opacity:0} }
-  /* Flowing air — drifting breeze streaks (AC running) */
-  .fx-air .p { height:3px; border-radius:3px; opacity:.3; filter:blur(.5px);
-    background:linear-gradient(90deg, transparent, var(--act-accent), transparent); animation:fxair linear infinite; }
-  @keyframes fxair { 0%{left:-45%;opacity:0} 15%{opacity:.4} 85%{opacity:.4} 100%{left:120%;opacity:0} }
+  /* Flowing air — bright breeze streaks (AC running). Uses a lighter tint than
+     the fill so it stays visible against the accent-colored fill. */
+  .fx-air .p { height:4px; border-radius:4px; opacity:.7; filter:blur(.4px);
+    background:linear-gradient(90deg, transparent, var(--act-accent-strong), #ffffff 50%, var(--act-accent-strong), transparent);
+    mix-blend-mode:screen; animation:fxair linear infinite; }
+  @keyframes fxair { 0%{left:-45%;opacity:0} 15%{opacity:.85} 85%{opacity:.85} 100%{left:120%;opacity:0} }
   /* Aurora — slow shifting gradient sheen */
   .fx-aurora .p { width:80%; height:170%; border-radius:50%; filter:blur(18px); opacity:.25; animation:fxaurora ease-in-out infinite; }
   .fx-aurora .p:nth-child(1){ top:-35%; left:-12%; background:var(--act-accent); animation-duration:11s; }
@@ -1249,6 +1251,6 @@ window.customCards.push({
 
 console.info(
   `%c AC-TIMER-CARD %c v${CARD_VERSION} `,
-  "color: white; background: #7B82E6; font-weight: 700;",
-  "color: #7B82E6; background: #1c1c1c;"
+  "color: white; background: #9B6FD4; font-weight: 700;",
+  "color: #9B6FD4; background: #1c1c1c;"
 );
