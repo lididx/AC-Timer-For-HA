@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.13.0";
+const CARD_VERSION = "1.14.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
   label_show: true,
   direction: "rtl", // rtl = 0 on the right (default), ltr = 0 on the left
   handle_style: "pill", // bar leading-edge marker: none|line|pill|dot|ring|diamond|glow
+  scale: "even", // position<->minutes mapping: even|short|strong
+  slide_hint: "Slide ←",
+  slide_hint_show: true,
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
@@ -71,6 +74,21 @@ function clampMinutes(m, c) {
   let v = Math.round(m / step) * step;
   v = Math.max(c.min_minutes, Math.min(c.max_minutes, v));
   return v;
+}
+
+// Non-linear position<->minutes mapping. `minutes = max * pos^k`, so larger k
+// makes short durations occupy more of the bar (and 3-4h compress at the end).
+const SCALE_CURVES = { even: 1, short: 2.2, strong: 3 };
+function curveK(c) {
+  return SCALE_CURVES[c.scale] || 1;
+}
+function posToMinutes(ratio, c) {
+  ratio = Math.max(0, Math.min(1, ratio));
+  return c.max_minutes * Math.pow(ratio, curveK(c));
+}
+function minutesToPos(minutes, c) {
+  const max = c.max_minutes || 1;
+  return Math.pow(Math.max(0, Math.min(1, minutes / max)), 1 / curveK(c));
 }
 
 function pad2(n) {
@@ -266,6 +284,15 @@ const DESIGNS = {
         box-shadow:0 0 10px var(--act-accent-glow); transform:translateY(-50%) rotate(45deg); }
       .acd-bar .h-glow { width:32px; height:32px; border-radius:50%; background:radial-gradient(circle,
         var(--act-accent-strong) 0%, color-mix(in srgb, var(--act-accent-strong) 30%, transparent) 45%, transparent 72%); }
+      .acd-bar .cap-hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+        pointer-events:none; z-index:2; opacity:0; transition:opacity .3s; }
+      .acd-bar.idle .cap-hint { opacity:1; }
+      .acd-bar .cap-hint span { font-size:.78rem; letter-spacing:4px; font-weight:600;
+        background:linear-gradient(90deg, color-mix(in srgb, var(--act-text-2) 25%, transparent) 0%,
+          var(--act-text) 50%, color-mix(in srgb, var(--act-text-2) 25%, transparent) 100%);
+        background-size:220% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+        animation:cap-shim 1.5s linear infinite; }
+      @keyframes cap-shim { 0%{background-position:220% 0} 100%{background-position:-220% 0} }
       .acd-bar .ends-row { display:flex; justify-content:center; margin-top:14px; }
       .acd-bar .ends-box { display:inline-flex; align-items:center; gap:10px; padding:9px 16px; border-radius:16px;
         background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
@@ -280,6 +307,11 @@ const DESIGNS = {
           <div class="cap-track"></div>
           <div class="cap-fill" id="fill"><div class="cap-hl"></div>${fxHtml(config)}</div>
           <div class="cap-handle h-${config.handle_style || "pill"}" id="dot"></div>
+          ${
+            config.slide_hint_show !== false && config.slide_hint
+              ? `<div class="cap-hint"><span dir="auto">${escapeHtml(config.slide_hint)}</span></div>`
+              : ""
+          }
         </div>
         <div class="time" id="big">00:00:00</div>
         ${barEndsHtml(config)}
@@ -292,7 +324,7 @@ const DESIGNS = {
         const rect = els.drag.getBoundingClientRect();
         const raw = rtl ? rect.right - ev.clientX : ev.clientX - rect.left;
         const ratio = Math.max(0, Math.min(1, raw / rect.width));
-        return clampMinutes(ratio * config.max_minutes, config);
+        return clampMinutes(posToMinutes(ratio, config), config);
       });
       return els;
     },
@@ -300,6 +332,7 @@ const DESIGNS = {
       const rtl = config.direction !== "ltr";
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
+      els.acd.classList.toggle("idle", snap.mode === "idle");
       els.fill.style.width = `${snap.frac * 100}%`;
 
       // Center the chosen handle on the fill's leading edge, clamped so it stays
@@ -361,7 +394,7 @@ const DESIGNS = {
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(1, (rect.bottom - ev.clientY) / rect.height));
-        return clampMinutes(ratio * config.max_minutes, config);
+        return clampMinutes(posToMinutes(ratio, config), config);
       });
       return els;
     },
@@ -431,7 +464,7 @@ const DESIGNS = {
       els.prog.style.strokeDasharray = els.progLen;
       api.attachDrag(els.drag, (ev) => {
         const f = angleToFraction(ev, els.drag, self.START, self.SWEEP, self.CY);
-        return clampMinutes(f * config.max_minutes, config);
+        return clampMinutes(posToMinutes(f, config), config);
       });
       return els;
     },
@@ -636,7 +669,7 @@ const BASE_STYLES = `
     .cap-fill,.cap-handle,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
     .acd.pulse .cap-handle,.acd.pulse .cap-fill,.acd.pulse .liquid,.acd.pulse .d-prog,.acd.pulse .d-knob,
     .acd.pulse .sline-fill,.acd.pulse .sline-dot,
-    .liquid::before, .fx .p { animation:none !important; }
+    .liquid::before, .fx .p, .cap-hint span { animation:none !important; }
   }
 `;
 
@@ -769,7 +802,7 @@ class AcTimerCard extends HTMLElement {
     if (this._adjusting && this._pendingMinutes != null) {
       minutes = this._pendingMinutes;
       remainingSec = minutes * 60;
-      frac = minutes / c.max_minutes;
+      frac = minutesToPos(minutes, c);
       endsAtMs = Date.now() + remainingSec * 1000;
       mode = "adjusting";
     } else if (running || paused) {
@@ -777,7 +810,7 @@ class AcTimerCard extends HTMLElement {
       // Absolute scale: the fill maps remaining minutes onto the 0..max range,
       // so a timer started at 60 (of 120) begins at the 60 mark and counts down
       // from there — it stays where the handle was released.
-      frac = remainingSec / (c.max_minutes * 60);
+      frac = minutesToPos(remainingSec / 60, c);
       minutes = Math.ceil(remainingSec / 60);
       endsAtMs = running ? Date.now() + remainingSec * 1000 : null;
       mode = running ? "running" : "paused";
@@ -785,7 +818,7 @@ class AcTimerCard extends HTMLElement {
       // user picked a value but hasn't started yet
       minutes = this._pendingMinutes;
       remainingSec = minutes * 60;
-      frac = minutes / c.max_minutes;
+      frac = minutesToPos(minutes, c);
       endsAtMs = Date.now() + remainingSec * 1000;
       mode = "idle";
     } else {
@@ -1038,6 +1071,14 @@ const EDITOR_SCHEMA = [
           ] } } },
         ],
       },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "slide_hint_show", selector: { boolean: {} } },
+          { name: "slide_hint", selector: { text: {} } },
+        ],
+      },
       { name: "ends_show", selector: { boolean: {} } },
       { name: "ends_label", selector: { text: {} } },
       {
@@ -1083,6 +1124,11 @@ const EDITOR_SCHEMA = [
           { name: "step", selector: { number: { min: 1, max: 60, mode: "box", unit_of_measurement: "min" } } },
         ],
       },
+      { name: "scale", selector: { select: { mode: "dropdown", options: [
+        { value: "even", label: "Even (linear)" },
+        { value: "short", label: "Favor short times" },
+        { value: "strong", label: "Strongly favor short" },
+      ] } } },
     ],
   },
   {
@@ -1144,6 +1190,9 @@ const EDITOR_LABELS = {
   label: "Label",
   direction: "Direction",
   handle_style: "Handle",
+  scale: "Scale",
+  slide_hint_show: "Show hint",
+  slide_hint: "Hint text",
   ends_label: "“Ends at” text",
   ends_icon_show: "Show icon",
   ends_icon: "Icon",
@@ -1184,6 +1233,9 @@ const EDITOR_HELPERS = {
   label: "Small label under the title (e.g. Runs in). Hebrew flows right-to-left automatically.",
   direction: "Which side is zero for the bar fill.",
   handle_style: "Marker on the bar's leading edge (Horizontal bar).",
+  scale: "How minutes map to the bar. 'Favor short' makes short times take up more of the bar (good for a wide 0–240 range).",
+  slide_hint_show: "Show a faint hint in the empty bar.",
+  slide_hint: "Faint shimmering hint shown when idle (e.g. “Slide ←”).",
   ends_label: "Text before the end time (e.g. “Ends at”, or Hebrew like “כיבוי בשעה”).",
   ends_icon_show: "Show the icon next to the end time.",
   ends_icon: "Icon shown next to the end time.",
