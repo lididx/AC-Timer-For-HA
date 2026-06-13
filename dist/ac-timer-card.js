@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.9.2";
+const CARD_VERSION = "1.10.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -25,6 +25,7 @@ const DEFAULT_CONFIG = {
   title: "AC Shutoff Timer",
   label: "Runs in",
   direction: "rtl", // rtl = 0 on the right (default), ltr = 0 on the left
+  handle_style: "pill", // bar leading-edge marker: none|line|pill|dot|ring|diamond|glow
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
@@ -237,10 +238,22 @@ const DESIGNS = {
         box-shadow:0 0 16px var(--act-accent-glow); transition:width .45s ease, right .45s ease, left .45s ease; }
       .acd-bar .cap-hl { position:absolute; top:3px; left:8px; right:8px; height:42%; border-radius:999px;
         background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
-      .acd-bar .cap-dot { position:absolute; top:50%; width:26px; height:26px; border-radius:50%;
+      .acd-bar .cap-handle { position:absolute; top:50%; transform:translateY(-50%); z-index:3;
+        pointer-events:none; transition:right .45s ease, left .45s ease; }
+      .acd-bar .h-none { display:none; }
+      .acd-bar .h-line { width:3px; height:66%; border-radius:3px; background:var(--act-accent-strong);
+        box-shadow:0 0 10px var(--act-accent-glow); }
+      .acd-bar .h-pill { width:8px; height:84%; border-radius:999px; background:var(--act-accent-strong);
+        box-shadow:0 0 12px var(--act-accent-glow); }
+      .acd-bar .h-dot { width:22px; height:22px; border-radius:50%;
         background:radial-gradient(circle at 35% 35%, var(--act-accent-strong), var(--act-active));
-        box-shadow:0 0 10px var(--act-accent-glow); transition:right .45s ease, left .45s ease; }
-      .acd-bar.running .cap-dot { width:22px; height:22px; }
+        box-shadow:0 0 10px var(--act-accent-glow); }
+      .acd-bar .h-ring { width:20px; height:20px; border-radius:50%; background:transparent; box-sizing:border-box;
+        border:3px solid var(--act-accent-strong); box-shadow:0 0 10px var(--act-accent-glow); }
+      .acd-bar .h-diamond { width:15px; height:15px; background:var(--act-accent-strong);
+        box-shadow:0 0 10px var(--act-accent-glow); transform:translateY(-50%) rotate(45deg); }
+      .acd-bar .h-glow { width:32px; height:32px; border-radius:50%; background:radial-gradient(circle,
+        var(--act-accent-strong) 0%, color-mix(in srgb, var(--act-accent-strong) 30%, transparent) 45%, transparent 72%); }
       .acd-bar .ends-row { display:flex; justify-content:center; margin-top:14px; }
       .acd-bar .ends-box { display:inline-flex; align-items:center; gap:10px; padding:9px 16px; border-radius:16px;
         background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
@@ -254,7 +267,7 @@ const DESIGNS = {
         <div class="cap" id="drag">
           <div class="cap-track"></div>
           <div class="cap-fill" id="fill"><div class="cap-hl"></div>${fxHtml(config)}</div>
-          <div class="cap-dot" id="dot"></div>
+          <div class="cap-handle h-${config.handle_style || "pill"}" id="dot"></div>
         </div>
         <div class="time" id="big">00:00:00</div>
         ${barEndsHtml(config)}
@@ -277,11 +290,10 @@ const DESIGNS = {
       els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.width = `${snap.frac * 100}%`;
 
-      // Place the glow dot on the fill's leading edge, but clamp it so it stays
+      // Center the chosen handle on the fill's leading edge, clamped so it stays
       // fully inside the track — at 0 it rests exactly on the zero line.
       const capW = els.drag.getBoundingClientRect().width || 1;
-      const dotW = snap.running || snap.paused ? 18 : 26;
-      const half = dotW / 2;
+      const half = (els.dot.offsetWidth || 0) / 2;
       const center = Math.max(half, Math.min(capW - half, snap.frac * capW));
       const edge = center - half;
       if (rtl) {
@@ -295,7 +307,6 @@ const DESIGNS = {
         els.dot.style.left = `${edge}px`;
         els.dot.style.right = "auto";
       }
-      els.dot.style.transform = "translateY(-50%)";
       if (els.endsv) els.endsv.innerHTML = snap.endsAt ? endsMarkup(snap.endsAt) : "—";
       paintShared(els, snap);
     },
@@ -599,7 +610,7 @@ const BASE_STYLES = `
   @keyframes fxfall { 0%{top:-20%;opacity:0} 20%{opacity:.26} 100%{top:120%;opacity:0} }
   /* The FX lives INSIDE the colored fill, so the animation only plays on the
      progressing line and shrinks with it; the static track stays clean. */
-  .acd-bar .cap-track { z-index:0; } .acd-bar .cap-fill { z-index:1; } .acd-bar .cap-dot { z-index:3; }
+  .acd-bar .cap-track { z-index:0; } .acd-bar .cap-fill { z-index:1; }
   .acd-vertical .liquid { z-index:1; overflow:hidden; }
   .acd-stepper .sline-fill { z-index:1; overflow:hidden; } .acd-stepper .sline-dot { z-index:3; }
   .acd-dial svg { position:relative; z-index:1; } .acd-dial .center { z-index:2; }
@@ -984,10 +995,25 @@ const EDITOR_SCHEMA = [
           { name: "label", selector: { text: {} } },
         ],
       },
-      { name: "direction", selector: { select: { mode: "dropdown", options: [
-        { value: "rtl", label: "Right → Left" },
-        { value: "ltr", label: "Left → Right" },
-      ] } } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "direction", selector: { select: { mode: "dropdown", options: [
+            { value: "rtl", label: "Right → Left" },
+            { value: "ltr", label: "Left → Right" },
+          ] } } },
+          { name: "handle_style", selector: { select: { mode: "dropdown", options: [
+            { value: "none", label: "None" },
+            { value: "line", label: "Line" },
+            { value: "pill", label: "Pill" },
+            { value: "dot", label: "Dot" },
+            { value: "ring", label: "Ring" },
+            { value: "diamond", label: "Diamond" },
+            { value: "glow", label: "Glow" },
+          ] } } },
+        ],
+      },
       { name: "ends_show", selector: { boolean: {} } },
       {
         name: "",
@@ -1068,6 +1094,7 @@ const EDITOR_LABELS = {
   title: "Title",
   label: "Label",
   direction: "Direction",
+  handle_style: "Handle",
   finish_action: "Action on finish",
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
@@ -1101,6 +1128,7 @@ const EDITOR_HELPERS = {
   title: "Name shown on the card.",
   label: "Small label under the title (e.g. Runs in).",
   direction: "Which side is zero for the bar fill.",
+  handle_style: "Marker on the bar's leading edge (Horizontal bar).",
   finish_action: "Runs when the countdown ends.",
   max_minutes: "Longest time you can set.",
   min_minutes: "Shortest time that starts it.",
