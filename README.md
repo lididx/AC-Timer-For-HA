@@ -6,10 +6,6 @@ Instead of fixed 30 / 45 / 60-minute buttons, you just **drag the bar to any dur
 
 ---
 
-## Why it's different
-
-The countdown runs **server-side** on a Home Assistant `timer` entity — not in the browser. That means it's:
-
 - **Shared** — everyone looking at the dashboard sees the exact same live countdown.
 - **Reliable** — it keeps running even when the app is closed or the phone is locked.
 - **Generic** — the card only starts/stops the timer and shows it; *what happens at the end* is a script / scene / automation you choose.
