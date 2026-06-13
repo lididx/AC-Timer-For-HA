@@ -17,13 +17,14 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.12.0";
+const CARD_VERSION = "1.13.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
   style: "none",
   title: "AC Shutoff Timer",
   label: "Runs in",
+  label_show: true,
   direction: "rtl", // rtl = 0 on the right (default), ltr = 0 on the left
   handle_style: "pill", // bar leading-edge marker: none|line|pill|dot|ring|diamond|glow
   max_minutes: 120,
@@ -32,6 +33,9 @@ const DEFAULT_CONFIG = {
   presets: ["15", "30", "45", "60"],
   presets_show: true,
   ends_show: true,
+  ends_label: "Ends at",
+  ends_icon: "mdi:calendar-clock",
+  ends_icon_show: true,
   ends_width: "chip", // "chip" (small) or "full" (full-width row)
   ends_size: 13, // px
 };
@@ -50,6 +54,7 @@ const COLOR_VARS = {
   warning: "--act-warning",
   danger: "--act-danger",
   ends_time: "--act-ends-time",
+  ends_icon_color: "--act-ends-icon",
   preset_text: "--act-preset-text",
   preset_bg: "--act-preset-bg",
   preset_border: "--act-preset-border",
@@ -134,25 +139,32 @@ function grabEls(root, names) {
 
 // Shared UI fragments -------------------------------------------------------
 function headHtml(config) {
-  const label = config.label ? `<div class="label">${escapeHtml(config.label)}</div>` : "";
-  return `<div class="head"><div class="title">${escapeHtml(config.title)}</div>${label}</div>`;
+  const show = config.label_show !== false && config.label;
+  const label = show ? `<div class="label" dir="auto">${escapeHtml(config.label)}</div>` : "";
+  return `<div class="head"><div class="title" dir="auto">${escapeHtml(config.title)}</div>${label}</div>`;
 }
-// "Ends at HH:MM" with the time in its own (configurable) color.
-function endsMarkup(endsAt) {
-  return endsAt ? `Ends at <span class="ends-time">${endsAt}</span>` : "";
+// "<label> HH:MM" with a custom prefix and the time in its own color.
+// dir="auto" on the container makes Hebrew labels flow right-to-left correctly.
+function endsMarkup(endsAt, config) {
+  if (!endsAt) return "";
+  const label = config && config.ends_label != null ? config.ends_label : "Ends at";
+  const prefix = label ? `${escapeHtml(label)} ` : "";
+  return `${prefix}<span class="ends-time">${endsAt}</span>`;
 }
 function endsHtml(config) {
   if (config && config.ends_show === false) return "";
-  return `<div class="ends" id="ends"></div>`;
+  return `<div class="ends" id="ends" dir="auto"></div>`;
 }
-// Horizontal-bar "Ends at" element with user-chosen size and width.
+// Horizontal-bar "Ends at" element with user-chosen size, width, and icon.
 function barEndsHtml(config) {
   if (config.ends_show === false) return "";
   const full = config.ends_width === "full";
   const fs = Number(config.ends_size) || 13;
-  return `<div class="ends-row"><div class="ends-box${full ? " full" : ""}" id="endsbox" style="font-size:${fs}px">
-      <span class="ic"><ha-icon icon="mdi:calendar-clock"></ha-icon></span><span id="endsv">—</span>
-    </div></div>`;
+  const icon =
+    config.ends_icon_show !== false && config.ends_icon
+      ? `<span class="ic"><ha-icon icon="${escapeHtml(config.ends_icon)}"></ha-icon></span>`
+      : "";
+  return `<div class="ends-row"><div class="ends-box${full ? " full" : ""}" id="endsbox" dir="auto" style="font-size:${fs}px">${icon}<span id="endsv">—</span></div></div>`;
 }
 function statusHtml() {
   return `<div class="status"><span class="dot" id="sdot"></span><span id="stext"></span></div>`;
@@ -216,9 +228,9 @@ function presetsHtml(config) {
     .join("")}</div>`;
 }
 
-function paintShared(els, snap) {
+function paintShared(els, snap, config) {
   if (els.big) els.big.textContent = snap.hms;
-  if (els.ends) els.ends.innerHTML = endsMarkup(snap.endsAt);
+  if (els.ends) els.ends.innerHTML = endsMarkup(snap.endsAt, config);
   if (els.stext) els.stext.textContent = snap.status;
 }
 
@@ -259,7 +271,7 @@ const DESIGNS = {
         background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
       .acd-bar .ends-box.full { display:flex; width:100%; justify-content:center; }
       .acd-bar .ends-box .ic { width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.3);
-        display:flex; align-items:center; justify-content:center; color:var(--act-accent); --mdc-icon-size:16px; flex:none; }
+        display:flex; align-items:center; justify-content:center; color:var(--act-ends-icon); --mdc-icon-size:16px; flex:none; }
     `,
     html(config) {
       return `<div class="acd acd-bar">
@@ -307,8 +319,8 @@ const DESIGNS = {
         els.dot.style.left = `${edge}px`;
         els.dot.style.right = "auto";
       }
-      if (els.endsv) els.endsv.innerHTML = snap.endsAt ? endsMarkup(snap.endsAt) : "—";
-      paintShared(els, snap);
+      if (els.endsv) els.endsv.innerHTML = snap.endsAt ? endsMarkup(snap.endsAt, config) : "—";
+      paintShared(els, snap, config);
     },
   },
 
@@ -353,11 +365,11 @@ const DESIGNS = {
       });
       return els;
     },
-    paint(els, snap) {
+    paint(els, snap, config) {
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.height = `${snap.frac * 100}%`;
-      paintShared(els, snap);
+      paintShared(els, snap, config);
     },
   },
 
@@ -423,7 +435,7 @@ const DESIGNS = {
       });
       return els;
     },
-    paint(els, snap) {
+    paint(els, snap, config) {
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
       els.prog.style.strokeDashoffset = els.progLen * (1 - snap.frac);
@@ -431,7 +443,7 @@ const DESIGNS = {
       const k = polarToCartesian(100, 100, this.R, end);
       els.knob.setAttribute("cx", k.x);
       els.knob.setAttribute("cy", k.y);
-      paintShared(els, snap);
+      paintShared(els, snap, config);
     },
   },
 
@@ -490,7 +502,7 @@ const DESIGNS = {
       });
       return els;
     },
-    paint(els, snap) {
+    paint(els, snap, config) {
       els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.width = `${snap.frac * 100}%`;
       els.dot.style.left = `${snap.frac * 100}%`;
@@ -501,7 +513,7 @@ const DESIGNS = {
       els.startlbl.textContent = running ? "Pause session" : snap.paused ? "Resume" : "Start session";
       els.start.querySelector("ha-icon").setAttribute("icon", running ? "mdi:pause" : "mdi:play");
       els.start.setAttribute("aria-label", running ? "Pause session" : "Start session");
-      paintShared(els, snap);
+      paintShared(els, snap, config);
     },
   },
 };
@@ -526,6 +538,7 @@ const BASE_STYLES = `
     --act-warning:#F2C14E;
     --act-danger:#E2685F;
     --act-ends-time:var(--act-accent);
+    --act-ends-icon:var(--act-accent);
     --act-preset-text:var(--act-text);
     --act-preset-bg:var(--act-btn-bg);
     --act-preset-border:var(--act-btn-border);
@@ -919,7 +932,10 @@ class AcTimerCard extends HTMLElement {
     const colors = this._config.colors || {};
     const host = this.shadowRoot.host;
     for (const [slot, cssVar] of Object.entries(COLOR_VARS)) {
-      const css = colorToCss(colors[slot]);
+      // Color may live under `colors:` (Colors section) or at the top level
+      // (the contextual pickers in Appearance / Favorite times).
+      const raw = colors[slot] != null ? colors[slot] : this._config[slot];
+      const css = colorToCss(raw);
       if (css) host.style.setProperty(cssVar, css);
       else host.style.removeProperty(cssVar);
     }
@@ -1000,14 +1016,9 @@ const EDITOR_SCHEMA = [
     title: "Appearance",
     icon: "mdi:eye-outline",
     schema: [
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          { name: "title", selector: { text: {} } },
-          { name: "label", selector: { text: {} } },
-        ],
-      },
+      { name: "title", selector: { text: {} } },
+      { name: "label_show", selector: { boolean: {} } },
+      { name: "label", selector: { text: {} } },
       {
         name: "",
         type: "grid",
@@ -1028,6 +1039,7 @@ const EDITOR_SCHEMA = [
         ],
       },
       { name: "ends_show", selector: { boolean: {} } },
+      { name: "ends_label", selector: { text: {} } },
       {
         name: "",
         type: "grid",
@@ -1039,7 +1051,22 @@ const EDITOR_SCHEMA = [
           { name: "ends_size", selector: { number: { min: 10, max: 48, mode: "slider", unit_of_measurement: "px" } } },
         ],
       },
-      { name: "ends_time", selector: { color_rgb: {} } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "ends_icon_show", selector: { boolean: {} } },
+          { name: "ends_icon", selector: { icon: {} } },
+        ],
+      },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "ends_time", selector: { color_rgb: {} } },
+          { name: "ends_icon_color", selector: { color_rgb: {} } },
+        ],
+      },
     ],
   },
   {
@@ -1113,9 +1140,14 @@ const EDITOR_LABELS = {
   design: "Design",
   style: "Style",
   title: "Title",
+  label_show: "Show label",
   label: "Label",
   direction: "Direction",
   handle_style: "Handle",
+  ends_label: "“Ends at” text",
+  ends_icon_show: "Show icon",
+  ends_icon: "Icon",
+  ends_icon_color: "Icon color",
   finish_entity: "Run on finish",
   finish_action: "Custom action (YAML)",
   max_minutes: "Max minutes",
@@ -1148,9 +1180,14 @@ const EDITOR_HELPERS = {
   design: "Shape of the timer (bar, ring, etc.).",
   style: "Ambient animation behind the timer.",
   title: "Name shown on the card.",
-  label: "Small label under the title (e.g. Runs in).",
+  label_show: "Show the small label under the title.",
+  label: "Small label under the title (e.g. Runs in). Hebrew flows right-to-left automatically.",
   direction: "Which side is zero for the bar fill.",
   handle_style: "Marker on the bar's leading edge (Horizontal bar).",
+  ends_label: "Text before the end time (e.g. “Ends at”, or Hebrew like “כיבוי בשעה”).",
+  ends_icon_show: "Show the icon next to the end time.",
+  ends_icon: "Icon shown next to the end time.",
+  ends_icon_color: "Color of that icon.",
   finish_entity: "Script, scene, or automation to run when the timer ends.",
   finish_action: "Optional: explicit service-call action(s) in YAML, instead of the entity above.",
   max_minutes: "Longest time you can set.",
@@ -1176,6 +1213,30 @@ const EDITOR_HELPERS = {
   warning: "The fill turns this color when under 1 minute is left.",
   danger: "The fill turns this color when under 10 seconds are left.",
 };
+
+// Theme default colors as [r,g,b], so the editor's color pickers show the real
+// color in use instead of an empty/black swatch. Split by where they're stored.
+const NS_COLOR_DEFAULTS = {
+  accent: [155, 111, 212],
+  accent_strong: [201, 168, 255],
+  card_grad_start: [32, 36, 52],
+  card_grad_end: [70, 88, 120],
+  card_border: [255, 255, 255],
+  text: [235, 235, 243],
+  text_secondary: [174, 182, 198],
+  track: [255, 255, 255],
+  warning: [242, 193, 78],
+  danger: [226, 104, 95],
+};
+const TOP_COLOR_DEFAULTS = {
+  ends_time: [155, 111, 212],
+  ends_icon_color: [155, 111, 212],
+  preset_text: [235, 235, 243],
+  preset_bg: [255, 255, 255],
+  preset_border: [255, 255, 255],
+};
+const sameColor = (a, b) =>
+  Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => v === b[i]);
 
 class AcTimerCardEditor extends HTMLElement {
   setConfig(config) {
@@ -1225,8 +1286,22 @@ class AcTimerCardEditor extends HTMLElement {
       this._form.computeHelper = (s) => EDITOR_HELPERS[s.name] || "";
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
+        const v = { ...ev.detail.value };
+        // Drop color values that equal the theme default, so they stay linked to
+        // the theme (and the config stays clean) rather than being frozen.
+        if (v.colors) {
+          const c = {};
+          for (const [k, val] of Object.entries(v.colors)) {
+            if (!sameColor(val, NS_COLOR_DEFAULTS[k])) c[k] = val;
+          }
+          if (Object.keys(c).length) v.colors = c;
+          else delete v.colors;
+        }
+        for (const k of Object.keys(TOP_COLOR_DEFAULTS)) {
+          if (k in v && sameColor(v[k], TOP_COLOR_DEFAULTS[k])) delete v[k];
+        }
         this.dispatchEvent(new CustomEvent("config-changed", {
-          detail: { config: ev.detail.value },
+          detail: { config: v },
           bubbles: true,
           composed: true,
         }));
@@ -1236,7 +1311,13 @@ class AcTimerCardEditor extends HTMLElement {
     }
     this._form.hass = this._hass;
     this._form.schema = EDITOR_SCHEMA;
-    this._form.data = this._config;
+    // Show real defaults in every field/swatch (the card applies these anyway).
+    const data = { ...DEFAULT_CONFIG, ...this._config };
+    data.colors = { ...NS_COLOR_DEFAULTS, ...(this._config.colors || {}) };
+    for (const k of Object.keys(TOP_COLOR_DEFAULTS)) {
+      if (data[k] == null) data[k] = TOP_COLOR_DEFAULTS[k];
+    }
+    this._form.data = data;
   }
 }
 customElements.define("ac-timer-card-editor", AcTimerCardEditor);
