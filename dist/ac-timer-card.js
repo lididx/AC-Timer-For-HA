@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -174,10 +174,10 @@ const DESIGNS = {
         box-shadow:0 0 16px var(--act-accent-glow); transition:width .45s ease, right .45s ease, left .45s ease; }
       .acd-bar .cap-hl { position:absolute; top:3px; left:8px; right:8px; height:42%; border-radius:999px;
         background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
-      .acd-bar .cap-dot { position:absolute; top:50%; width:22px; height:22px; border-radius:50%;
-        background:var(--act-accent-strong); box-shadow:0 0 14px var(--act-accent-glow), 0 0 5px var(--act-accent-strong);
-        transition:right .45s ease, left .45s ease; }
-      .acd-bar.running .cap-dot { width:18px; height:18px; }
+      .acd-bar .cap-dot { position:absolute; top:50%; width:26px; height:26px; border-radius:50%;
+        background:radial-gradient(circle at 35% 35%, var(--act-accent-strong), var(--act-active));
+        box-shadow:0 0 10px var(--act-accent-glow); transition:right .45s ease, left .45s ease; }
+      .acd-bar.running .cap-dot { width:22px; height:22px; }
       .acd-bar .ends-row { display:flex; justify-content:center; margin-top:14px; }
       .acd-bar .ends-box { display:inline-flex; align-items:center; gap:10px; padding:9px 16px; border-radius:16px;
         background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
@@ -215,18 +215,20 @@ const DESIGNS = {
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
       const pct = `${snap.frac * 100}%`;
+      // Seat the glow dot just inside the fill's leading edge so it reads as a
+      // bright head attached to the bar, not a floating dot beyond it.
       if (rtl) {
         els.fill.style.right = "0";
         els.fill.style.left = "auto";
         els.dot.style.right = pct;
         els.dot.style.left = "auto";
-        els.dot.style.transform = "translate(50%,-50%)";
+        els.dot.style.transform = "translate(100%,-50%)";
       } else {
         els.fill.style.left = "0";
         els.fill.style.right = "auto";
         els.dot.style.left = pct;
         els.dot.style.right = "auto";
-        els.dot.style.transform = "translate(-50%,-50%)";
+        els.dot.style.transform = "translate(-100%,-50%)";
       }
       els.fill.style.width = pct;
       if (els.endsv) els.endsv.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "—";
