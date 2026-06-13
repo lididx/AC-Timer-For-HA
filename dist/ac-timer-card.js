@@ -21,7 +21,7 @@
  * No build step required: this is a plain custom element.
  */
 
-const CARD_VERSION = "0.4.0";
+const CARD_VERSION = "0.5.0";
 
 const DEFAULT_CONFIG = {
   title: "AC Shutoff Timer",
@@ -281,6 +281,15 @@ class AcTimerCard extends HTMLElement {
     if (!this._config.timer_entity) {
       this._els.big.textContent = "—";
       this._els.sub.textContent = "Open the card editor to finish setup";
+      this._els.cancel.style.display = "none";
+      this._els.fill.style.width = "0%";
+      this._els.handle.style.right = "0%";
+      return;
+    }
+
+    if (this._hass && !this._stateObj()) {
+      this._els.big.textContent = "—";
+      this._els.sub.textContent = `Timer entity not found: ${this._config.timer_entity}`;
       this._els.cancel.style.display = "none";
       this._els.fill.style.width = "0%";
       this._els.handle.style.right = "0%";
@@ -601,6 +610,31 @@ const EDITOR_LABELS = {
   cancel: "Cancel button",
 };
 
+// Per-field descriptions shown under each control in the visual editor.
+const EDITOR_HELPERS = {
+  title: "Card title shown at the top.",
+  finish_action:
+    "What runs when the countdown reaches zero (e.g. your AC-off script).",
+  max_minutes: "Minutes at the far end of the bar (the maximum you can drag to).",
+  min_minutes: "Smallest value that will start the timer.",
+  step: "Drag snapping, in minutes (e.g. 1 = whole minutes, 5 = steps of 5).",
+  timer_entity:
+    "Auto-created for you. Only change this if you want to use your own timer helper.",
+  // Colors
+  accent: "Main fill color of the bar BEFORE the timer starts (while setting).",
+  accent2:
+    "Second gradient color of the bar before start. Set it equal to the main color for a solid (non-gradient) fill.",
+  running_from: "Main fill color of the bar WHILE the countdown is running.",
+  running_to:
+    "Second gradient color while running. Set it equal to the main color for a solid fill.",
+  track_bg: "The empty track behind the bar.",
+  handle: "The white grip you drag to set the time.",
+  value: "The big number / countdown time in the center.",
+  title_color: "The card title text color.",
+  sub: "Small helper text (e.g. 'Drag to set') and the minute labels under the bar.",
+  cancel: "The Cancel button shown while the countdown is running.",
+};
+
 class AcTimerCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = config;
@@ -666,6 +700,7 @@ class AcTimerCardEditor extends HTMLElement {
     if (!this._form) {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) => EDITOR_LABELS[s.name] || s.name;
+      this._form.computeHelper = (s) => EDITOR_HELPERS[s.name] || "";
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
         this.dispatchEvent(
