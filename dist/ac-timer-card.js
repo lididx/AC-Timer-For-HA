@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.11.0";
+const CARD_VERSION = "1.11.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -572,10 +572,10 @@ const BASE_STYLES = `
   .btn-cancel { border:1px solid var(--act-btn-border); border-radius:14px; padding:9px 28px; font-weight:600;
     cursor:pointer; font-family:inherit; background:transparent; color:var(--act-danger); }
   .hint { padding:26px 14px; text-align:center; font-size:.95rem; color:var(--act-text-2); }
-  .acd.dragging .cap-fill, .acd.dragging .cap-dot, .acd.dragging .liquid,
+  .acd.dragging .cap-fill, .acd.dragging .cap-handle, .acd.dragging .liquid,
   .acd.dragging .d-prog, .acd.dragging .d-knob,
   .acd.dragging .sline-fill, .acd.dragging .sline-dot { transition:none !important; }
-  .acd.pulse .cap-dot, .acd.pulse .cap-fill, .acd.pulse .liquid,
+  .acd.pulse .cap-handle, .acd.pulse .cap-fill, .acd.pulse .liquid,
   .acd.pulse .d-prog, .acd.pulse .d-knob, .acd.pulse .a-prog, .acd.pulse .a-dot,
   .acd.pulse .sline-fill, .acd.pulse .sline-dot { animation:actpulse 1s ease-in-out infinite; }
   @keyframes actpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
@@ -618,8 +618,8 @@ const BASE_STYLES = `
     mask:radial-gradient(circle closest-side at 50% 50%, transparent 0 66%, #000 71% 86%, transparent 91%); }
 
   @media (prefers-reduced-motion: reduce) {
-    .cap-fill,.cap-dot,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
-    .acd.pulse .cap-dot,.acd.pulse .cap-fill,.acd.pulse .liquid,.acd.pulse .d-prog,.acd.pulse .d-knob,
+    .cap-fill,.cap-handle,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
+    .acd.pulse .cap-handle,.acd.pulse .cap-fill,.acd.pulse .liquid,.acd.pulse .d-prog,.acd.pulse .d-knob,
     .acd.pulse .sline-fill,.acd.pulse .sline-dot,
     .liquid::before, .fx .p { animation:none !important; }
   }
