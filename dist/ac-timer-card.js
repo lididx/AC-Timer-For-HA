@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.2.1";
+const CARD_VERSION = "1.3.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -398,7 +398,7 @@ const DESIGNS = {
       .acd-stepper .start ha-icon { --mdc-icon-size:20px; }
     `,
     html(config) {
-      const init = clampMinutes(Math.min(Math.max(config.min_minutes, 30), config.max_minutes), config);
+      const init = clampMinutes((config.min_minutes + config.max_minutes) / 2, config);
       const presets = this.PRESETS.filter((p) => p >= config.min_minutes && p <= config.max_minutes)
         .map((p) => `<button class="preset" data-min="${p}" aria-label="${p} minutes">${p}</button>`)
         .join("");
@@ -442,9 +442,11 @@ const DESIGNS = {
       els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.width = `${snap.frac * 100}%`;
       els.dot.style.left = `${snap.frac * 100}%`;
-      if (!snap.running && !snap.paused) els.slider.value = snap.minutes;
+      // Keep the slider resting at its middle default until the user picks a
+      // value; only mirror snap.minutes once there's a pending selection.
+      if (!snap.running && !snap.paused && snap.hasPending) els.slider.value = snap.minutes;
       els.presets.querySelectorAll(".preset").forEach((b) =>
-        b.classList.toggle("sel", Number(b.dataset.min) === snap.minutes && !snap.running)
+        b.classList.toggle("sel", snap.hasPending && Number(b.dataset.min) === snap.minutes && !snap.running)
       );
       const running = snap.running;
       els.startlbl.textContent = running ? "Pause session" : snap.paused ? "Resume" : "Start session";
@@ -645,11 +647,19 @@ class AcTimerCard extends HTMLElement {
       minutes = Math.ceil(remainingSec / 60);
       endsAtMs = running ? Date.now() + remainingSec * 1000 : null;
       mode = running ? "running" : "paused";
-    } else {
-      minutes = this._pendingMinutes != null ? this._pendingMinutes : this._lastIdleMinutes != null ? this._lastIdleMinutes : Math.min(30, c.max_minutes);
+    } else if (this._pendingMinutes != null) {
+      // user picked a value but hasn't started yet
+      minutes = this._pendingMinutes;
       remainingSec = minutes * 60;
       frac = minutes / c.max_minutes;
       endsAtMs = Date.now() + remainingSec * 1000;
+      mode = "idle";
+    } else {
+      // untouched idle — start clean at zero, no projected end time
+      minutes = 0;
+      remainingSec = 0;
+      frac = 0;
+      endsAtMs = null;
       mode = "idle";
     }
     frac = Math.max(0, Math.min(1, frac));
@@ -677,6 +687,7 @@ class AcTimerCard extends HTMLElement {
       endsAt: endsAtMs ? fmtClock(endsAtMs) : "",
       status,
       pulse: running && remainingSec <= 10,
+      hasPending: this._pendingMinutes != null,
     };
   }
 
