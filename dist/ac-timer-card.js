@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.9.0";
+const CARD_VERSION = "1.9.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -498,10 +498,10 @@ const DESIGNS = {
 // Theme defaults + shared styles -------------------------------------------
 const BASE_STYLES = `
   :host {
-    /* Default theme — tuned to match the AC dashboard (dark navy, cool blue-violet). */
-    --act-card-grad-start:#1B2030;
-    --act-card-grad-end:#0E1018;
-    --act-card-border:rgba(255,255,255,0.10);
+    /* Default theme — Blue Gray card (gradient) like the "turn off AC" button. */
+    --act-card-grad-start:#3D4B59;
+    --act-card-grad-end:#1E262E;
+    --act-card-border:rgba(255,255,255,0.12);
     --act-text:#ECEFF7;
     --act-text-2:#9AA2B8;
     --act-text-muted:#6B7287;
