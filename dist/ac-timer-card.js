@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.5.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -28,6 +28,8 @@ const DEFAULT_CONFIG = {
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
+  presets: ["15", "30", "45", "60"],
+  presets_show: true,
   ends_show: true,
   ends_width: "chip", // "chip" (small) or "full" (full-width row)
   ends_size: 13, // px
@@ -185,11 +187,32 @@ function cancelHtml() {
   return `<div class="cancel-wrap"><button class="btn-cancel" id="cancel" aria-label="Cancel timer">Cancel</button></div>`;
 }
 
+// User-defined favorite times -> a clean, deduped, in-range list of minutes.
+function parsePresets(config) {
+  let list = config.presets;
+  if (typeof list === "string") list = list.split(/[^0-9.]+/);
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const raw of list) {
+    const v = Math.round(Number(raw));
+    if (!isNaN(v) && v > 0) out.push(clampMinutes(v, config));
+  }
+  return Array.from(new Set(out)).sort((a, b) => a - b);
+}
+// A symmetric row of quick-start "favorite time" chips, shared by every design.
+function presetsHtml(config) {
+  if (config.presets_show === false) return "";
+  const list = parsePresets(config);
+  if (!list.length) return "";
+  return `<div class="presets" id="presets">${list
+    .map((m) => `<button class="preset" data-min="${m}" aria-label="${m} minutes">${m}<span class="preset-u">m</span></button>`)
+    .join("")}</div>`;
+}
+
 function paintShared(els, snap) {
   if (els.big) els.big.textContent = snap.hms;
   if (els.ends) els.ends.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "";
   if (els.stext) els.stext.textContent = snap.status;
-  if (els.cancel) els.cancel.style.display = snap.running || snap.paused ? "" : "none";
 }
 
 /* ============================================================
@@ -229,11 +252,10 @@ const DESIGNS = {
         </div>
         <div class="time" id="big">00:00:00</div>
         ${barEndsHtml(config)}
-        ${cancelHtml()}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "fill", "dot", "big", "endsv", "cancel", "acd|.acd"]);
+      const els = grabEls(root, ["drag", "fill", "dot", "big", "endsv", "acd|.acd"]);
       const rtl = config.direction !== "ltr";
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
@@ -241,7 +263,6 @@ const DESIGNS = {
         const ratio = Math.max(0, Math.min(1, raw / rect.width));
         return clampMinutes(ratio * config.max_minutes, config);
       });
-      els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
     paint(els, snap, config) {
@@ -300,17 +321,15 @@ const DESIGNS = {
         </div>
         <div class="time" id="big">00:00:00</div>
         ${endsHtml(config)}
-        ${cancelHtml()}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "fill", "big", "ends", "cancel", "acd|.acd"]);
+      const els = grabEls(root, ["drag", "fill", "big", "ends", "acd|.acd"]);
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(1, (rect.bottom - ev.clientY) / rect.height));
         return clampMinutes(ratio * config.max_minutes, config);
       });
-      els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
     paint(els, snap) {
@@ -364,11 +383,10 @@ const DESIGNS = {
             ${endsHtml(config)}
           </div>
         </div>
-        ${cancelHtml()}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "prog", "knob", "big", "ends", "sdot", "stext", "cancel", "acd|.acd"]);
+      const els = grabEls(root, ["drag", "prog", "knob", "big", "ends", "sdot", "stext", "acd|.acd"]);
       const self = this;
       els.progLen = 0;
       try {
@@ -381,7 +399,6 @@ const DESIGNS = {
         const f = angleToFraction(ev, els.drag, self.START, self.SWEEP, self.CY);
         return clampMinutes(f * config.max_minutes, config);
       });
-      els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
     paint(els, snap) {
@@ -398,7 +415,6 @@ const DESIGNS = {
 
   stepper: {
     label: "Minimal stepper",
-    PRESETS: [5, 15, 25, 60],
     css: `
       .acd-stepper .time { font-size:3rem; margin:6px 0 14px; }
       .acd-stepper .sline { position:relative; height:6px; border-radius:999px; background:var(--act-track-dark);
@@ -413,11 +429,6 @@ const DESIGNS = {
       .acd-stepper .step-btn { width:46px; height:46px; border-radius:16px; cursor:pointer; font-size:1.5rem;
         line-height:1; font-family:inherit; color:var(--act-text); background:var(--act-btn-bg);
         border:1px solid var(--act-btn-border); box-shadow:0 2px 6px rgba(0,0,0,.3); }
-      .acd-stepper .presets { display:flex; gap:8px; margin-bottom:16px; }
-      .acd-stepper .preset { flex:1; padding:9px 0; border-radius:14px; cursor:pointer; font-size:.85rem;
-        font-family:inherit; color:var(--act-text-2); background:var(--act-btn-bg); border:1px solid var(--act-btn-border); }
-      .acd-stepper .preset.sel { color:var(--act-accent); border-color:var(--act-accent);
-        background:color-mix(in srgb, var(--act-accent) 14%, transparent); }
       .acd-stepper .start { display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
         border:none; border-radius:18px; padding:14px; font-size:1rem; font-weight:600; cursor:pointer;
         font-family:inherit; color:#08120A;
@@ -427,9 +438,6 @@ const DESIGNS = {
     `,
     html(config) {
       const init = clampMinutes((config.min_minutes + config.max_minutes) / 2, config);
-      const presets = this.PRESETS.filter((p) => p >= config.min_minutes && p <= config.max_minutes)
-        .map((p) => `<button class="preset" data-min="${p}" aria-label="${p} minutes">${p}</button>`)
-        .join("");
       return `<div class="acd acd-stepper">
         ${headHtml(config)}
         <div class="time" id="big">00:00:00</div>
@@ -439,14 +447,12 @@ const DESIGNS = {
           <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}" aria-label="Set minutes">
           <button class="step-btn" id="plus" aria-label="Increase time">+</button>
         </div>
-        <div class="presets" id="presets">${presets}</div>
         <button class="start" id="start" aria-label="Start session"><ha-icon icon="mdi:play"></ha-icon><span id="startlbl">Start session</span></button>
         ${endsHtml(config)}
-        ${cancelHtml()}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["big", "fill", "dot", "slider", "minus", "plus", "presets", "start", "startlbl", "ends", "cancel", "acd|.acd"]);
+      const els = grabEls(root, ["big", "fill", "dot", "slider", "minus", "plus", "start", "startlbl", "ends", "acd|.acd"]);
       const cur = () => clampMinutes(Number(els.slider.value), config);
       const setVal = (m) => {
         els.slider.value = clampMinutes(m, config);
@@ -455,15 +461,11 @@ const DESIGNS = {
       els.minus.addEventListener("click", () => setVal(cur() - config.step));
       els.plus.addEventListener("click", () => setVal(cur() + config.step));
       els.slider.addEventListener("input", () => api.setValue(cur()));
-      els.presets.querySelectorAll(".preset").forEach((b) =>
-        b.addEventListener("click", () => setVal(Number(b.dataset.min)))
-      );
       els.start.addEventListener("click", () => {
         if (api.isRunning()) api.pause();
         else if (api.isPaused()) api.resume();
         else api.commit(cur());
       });
-      els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
     paint(els, snap) {
@@ -473,9 +475,6 @@ const DESIGNS = {
       // Keep the slider resting at its middle default until the user picks a
       // value; only mirror snap.minutes once there's a pending selection.
       if (!snap.running && !snap.paused && snap.hasPending) els.slider.value = snap.minutes;
-      els.presets.querySelectorAll(".preset").forEach((b) =>
-        b.classList.toggle("sel", snap.hasPending && Number(b.dataset.min) === snap.minutes && !snap.running)
-      );
       const running = snap.running;
       els.startlbl.textContent = running ? "Pause session" : snap.paused ? "Resume" : "Start session";
       els.start.querySelector("ha-icon").setAttribute("icon", running ? "mdi:pause" : "mdi:play");
@@ -532,6 +531,15 @@ const BASE_STYLES = `
     display:flex; align-items:center; justify-content:center; --mdc-icon-size:17px; color:var(--act-accent); }
   .chip-l { display:block; font-size:.68rem; color:var(--act-text-muted); }
   .chip-v { display:block; font-size:.9rem; font-weight:600; color:var(--act-text); }
+  .presets { display:flex; gap:8px; margin-top:14px; }
+  .preset { flex:1; display:flex; align-items:baseline; justify-content:center; gap:2px; padding:10px 0;
+    border-radius:14px; cursor:pointer; font-size:1rem; font-weight:700; font-family:inherit;
+    color:var(--act-text); background:var(--act-btn-bg); border:1px solid var(--act-btn-border); transition:all .15s; }
+  .preset:hover { border-color:var(--act-accent); }
+  .preset .preset-u { font-size:.62rem; font-weight:500; color:var(--act-text-2); }
+  .preset.sel { color:var(--act-accent); border-color:var(--act-accent);
+    background:color-mix(in srgb, var(--act-accent) 14%, transparent); }
+  .preset.sel .preset-u { color:var(--act-accent); }
   .cancel-wrap { display:flex; justify-content:center; margin-top:16px; }
   .btn-cancel { border:1px solid var(--act-btn-border); border-radius:14px; padding:9px 28px; font-weight:600;
     cursor:pointer; font-family:inherit; background:transparent; color:var(--act-danger); }
@@ -831,12 +839,27 @@ class AcTimerCard extends HTMLElement {
       <ha-card>
         ${fxHtml(this._config)}
         <div class="hint" id="hint" style="display:none"></div>
-        <div id="root">${design.html(this._config)}</div>
+        <div id="root">
+          ${design.html(this._config)}
+          ${presetsHtml(this._config)}
+          ${cancelHtml()}
+        </div>
       </ha-card>`;
     this._applyColors();
     this._hintEl = this.shadowRoot.getElementById("hint");
     this._rootWrap = this.shadowRoot.getElementById("root");
     this._designEls = design.wire(this.shadowRoot, this._makeApi(), this._config);
+
+    // Shared, design-agnostic controls: favorite-time presets + cancel.
+    this._cancelEl = this.shadowRoot.getElementById("cancel");
+    if (this._cancelEl) this._cancelEl.addEventListener("click", () => this._cancelTimer());
+    this._presetEls = Array.from(this.shadowRoot.querySelectorAll(".preset"));
+    for (const b of this._presetEls) {
+      b.addEventListener("click", () => {
+        this._pendingMinutes = clampMinutes(Number(b.dataset.min), this._config);
+        this._commit();
+      });
+    }
     this._updateView();
   }
   _applyColors() {
@@ -874,6 +897,15 @@ class AcTimerCard extends HTMLElement {
       this._designEls.acd.classList.toggle("dragging", snap.mode === "adjusting");
     }
     this._design.paint(this._designEls, snap, this._config);
+
+    // Shared controls: cancel visibility + highlight the active favorite.
+    if (this._cancelEl) this._cancelEl.style.display = snap.running || snap.paused ? "" : "none";
+    if (this._presetEls && this._presetEls.length) {
+      const activeMin = snap.running || snap.paused ? Math.round(this._configuredSeconds() / 60) : null;
+      for (const b of this._presetEls) {
+        b.classList.toggle("sel", activeMin != null && Number(b.dataset.min) === activeMin);
+      }
+    }
   }
   _startTicking() {
     this._stopTicking();
@@ -958,6 +990,19 @@ const EDITOR_SCHEMA = [
     ],
   },
   {
+    type: "expandable",
+    title: "Favorite times",
+    icon: "mdi:star-outline",
+    schema: [
+      { name: "presets_show", selector: { boolean: {} } },
+      { name: "presets", selector: { select: { multiple: true, custom_value: true, options: [
+        { value: "5", label: "5" }, { value: "10", label: "10" }, { value: "15", label: "15" },
+        { value: "20", label: "20" }, { value: "30", label: "30" }, { value: "45", label: "45" },
+        { value: "60", label: "60" }, { value: "90", label: "90" }, { value: "120", label: "120" },
+      ] } } },
+    ],
+  },
+  {
     name: "colors",
     type: "expandable",
     title: "Colors",
@@ -988,6 +1033,8 @@ const EDITOR_LABELS = {
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
   step: "Minute step",
+  presets_show: "Show favorite times",
+  presets: "Favorite times (min)",
   ends_show: "Show “Ends at”",
   ends_width: "“Ends at” width",
   ends_size: "“Ends at” text size",
@@ -1015,6 +1062,8 @@ const EDITOR_HELPERS = {
   max_minutes: "Longest time you can set.",
   min_minutes: "Shortest time that starts it.",
   step: "Drag snap, in minutes.",
+  presets_show: "Show the favorite-time chips below the timer.",
+  presets: "Tap a chip to start that time instantly. Type any number to add your own.",
   ends_show: "Show the end time under the bar.",
   ends_width: "A small chip, or a full-width row.",
   ends_size: "Font size of the end time, in pixels.",
