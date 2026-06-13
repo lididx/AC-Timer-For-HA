@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.9.1";
+const CARD_VERSION = "1.9.2";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -498,13 +498,13 @@ const DESIGNS = {
 // Theme defaults + shared styles -------------------------------------------
 const BASE_STYLES = `
   :host {
-    /* Default theme — Blue Gray card (gradient) like the "turn off AC" button. */
-    --act-card-grad-start:#3D4B59;
-    --act-card-grad-end:#1E262E;
+    /* Default theme — Blue Gray gradient matching the "turn off AC" button. */
+    --act-card-grad-start:#202434;
+    --act-card-grad-end:#465878;
     --act-card-border:rgba(255,255,255,0.12);
-    --act-text:#ECEFF7;
-    --act-text-2:#9AA2B8;
-    --act-text-muted:#6B7287;
+    --act-text:#EBEBF3;
+    --act-text-2:#AEB6C6;
+    --act-text-muted:#7E879A;
     --act-accent:#7B82E6;
     --act-accent-strong:#ADB4FF;
     --act-accent-glow:color-mix(in srgb, var(--act-accent) 45%, transparent);
@@ -522,7 +522,7 @@ const BASE_STYLES = `
   }
   ha-card {
     position:relative;
-    background:linear-gradient(160deg, var(--act-card-grad-start), var(--act-card-grad-end));
+    background:linear-gradient(135deg, var(--act-card-grad-start), var(--act-card-grad-end));
     border:1px solid var(--act-card-border);
     border-radius:24px;
     padding:26px;
