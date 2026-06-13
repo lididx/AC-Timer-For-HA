@@ -1,41 +1,48 @@
 /**
- * AC Timer For HA — a draggable countdown card for Home Assistant.
+ * AC Timer For HA — a premium draggable countdown card for Home Assistant.
  *
- * One card, multiple designs (set via the `design` option):
- *   - bar      : horizontal drag track (default)
- *   - vertical : vertical drag track
- *   - dial     : radial knob (drag around a circle)
- *   - arc      : semicircular gauge
- *   - stepper  : minimal +/- buttons + slider + Start
+ * One card, five designs (set via the `design` option):
+ *   - bar      : horizontal premium capsule
+ *   - vertical : glass liquid vessel
+ *   - dial     : countdown ring
+ *   - arc      : speedometer gauge
+ *   - stepper  : compact control panel
  *
- * All designs share the same logic: drag/set the minutes, start a server-side
- * `timer` entity (timer.start), show the live countdown, and run a configurable
- * `finish_action` when it ends. Created by Lidor Nahum.
+ * Shared logic: drag/set minutes, start a server-side `timer` entity, show the
+ * live countdown + end time + status, and run a configurable `finish_action`.
  *
- * No build step required: this is a plain custom element.
+ * Theming: every color comes from CSS variables (a central dark/green theme by
+ * default). Any color is overridable from the card editor (`colors:` config) —
+ * nothing is hardcoded inside the components. No percentages are ever shown.
+ *
+ * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "0.6.0";
+const CARD_VERSION = "1.0.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
   title: "AC Shutoff Timer",
+  label: "Runs in",
+  direction: "rtl", // rtl = 0 on the right (default), ltr = 0 on the left
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
 };
 
+// config.colors.<slot> -> CSS variable. All optional; theme defaults live in CSS.
 const COLOR_VARS = {
-  accent: "--ac-acc",
-  accent2: "--ac-acc2",
-  running_from: "--ac-run-from",
-  running_to: "--ac-run-to",
-  track_bg: "--ac-track",
-  handle: "--ac-handle",
-  title_color: "--ac-title",
-  value: "--ac-value",
-  sub: "--ac-sub",
-  cancel: "--ac-cancel",
+  accent: "--act-accent",
+  accent_strong: "--act-accent-strong",
+  accent_glow: "--act-accent-glow",
+  card_grad_start: "--act-card-grad-start",
+  card_grad_end: "--act-card-grad-end",
+  card_border: "--act-card-border",
+  text: "--act-text",
+  text_secondary: "--act-text-2",
+  track: "--act-track",
+  warning: "--act-warning",
+  danger: "--act-danger",
 };
 
 function colorToCss(c) {
@@ -51,34 +58,41 @@ function clampMinutes(m, c) {
   return v;
 }
 
-function bigText(snap) {
-  return snap.mode === "running" || snap.mode === "paused"
-    ? snap.hms
-    : `${snap.minutes} min`;
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+function fmtHMS(sec) {
+  sec = Math.max(0, Math.round(sec));
+  return `${pad2(Math.floor(sec / 3600))}:${pad2(Math.floor((sec % 3600) / 60))}:${pad2(sec % 60)}`;
+}
+function fmtCoarse(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+function fmtClock(ms) {
+  return new Date(ms).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
-function subText(snap) {
-  if (snap.mode === "running") return "Runs in";
-  if (snap.mode === "paused") return "Paused";
-  if (snap.mode === "adjusting") return "Release to start";
-  return "Drag to set";
-}
-
-// ---- SVG geometry helpers (for dial / arc) ----
+// ---- SVG geometry helpers ----
 function polarToCartesian(cx, cy, r, deg) {
   const rad = (deg * Math.PI) / 180;
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
-
 function describeArc(cx, cy, r, startDeg, endDeg) {
   const start = polarToCartesian(cx, cy, r, startDeg);
   const end = polarToCartesian(cx, cy, r, endDeg);
-  const delta = endDeg - startDeg;
-  const largeArc = delta > 180 ? 1 : 0;
+  const largeArc = endDeg - startDeg > 180 ? 1 : 0;
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
-
-// Pointer position -> fraction [0..1] along an arc sweep.
 function angleToFraction(ev, el, startDeg, sweep, cyFrac) {
   const rect = el.getBoundingClientRect();
   const cx = rect.left + rect.width * 0.5;
@@ -90,109 +104,165 @@ function angleToFraction(ev, el, startDeg, sweep, cyFrac) {
   return rel / sweep;
 }
 
-function ticksHtml(config, vertical) {
-  const max = config.max_minutes;
-  const n = 6;
-  let html = "";
-  for (let i = 0; i <= n; i++) {
-    const minutes = Math.round((max / n) * i);
-    const pct = (i / n) * 100;
-    // bar is RTL (0 on the right); vertical has 0 at the bottom.
-    const pos = vertical ? `bottom:${pct}%` : `right:${pct}%`;
-    html += `<span class="tick" style="${pos}">${minutes}</span>`;
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str == null ? "" : String(str);
+  return div.innerHTML;
+}
+function grabEls(root, names) {
+  const els = {};
+  for (const n of names) {
+    if (n.includes("|")) {
+      const [key, sel] = n.split("|");
+      els[key] = root.querySelector(sel);
+    } else {
+      els[n] = root.getElementById(n);
+    }
   }
-  return html;
+  return els;
+}
+
+// Shared UI fragments -------------------------------------------------------
+function headHtml(config) {
+  return `<div class="head">
+      <div class="title">${escapeHtml(config.title)}</div>
+      <div class="label" id="label">${escapeHtml(config.label || "")}</div>
+    </div>`;
+}
+function endsHtml() {
+  return `<div class="ends" id="ends"></div>`;
+}
+function statusHtml() {
+  return `<div class="status"><span class="dot" id="sdot"></span><span id="stext"></span></div>`;
+}
+function cancelHtml() {
+  return `<div class="cancel-wrap"><button class="btn-cancel" id="cancel" aria-label="Cancel timer">Cancel</button></div>`;
+}
+
+function paintShared(els, snap) {
+  if (els.big) els.big.textContent = snap.hms;
+  if (els.ends) els.ends.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "";
+  if (els.stext) els.stext.textContent = snap.status;
+  if (els.cancel) els.cancel.style.display = snap.running || snap.paused ? "" : "none";
 }
 
 /* ============================================================
- * Design renderers. Each: { label, css, html(config),
- *   wire(shadowRoot, api, config) -> els, paint(els, snap, config) }
+ * Design renderers
  * ============================================================ */
 const DESIGNS = {
   bar: {
     label: "Horizontal bar",
     css: `
-      .acd-bar .track { position:relative; height:56px; border-radius:14px;
-        background:var(--ac-track, color-mix(in srgb, var(--primary-text-color) 8%, transparent));
+      .acd-bar .cap { position:relative; height:42px; border-radius:999px; margin:18px 0 22px;
         touch-action:none; cursor:pointer; user-select:none; }
-      .acd-bar .fill { position:absolute; top:0; right:0; height:100%; width:0%;
-        border-radius:14px; transition:width .12s ease-out;
-        background:linear-gradient(90deg, var(--ac-acc, var(--primary-color,#3f9eff)), var(--ac-acc2,#7b61ff)); }
-      .acd-bar.running .fill { transition:width .5s linear;
-        background:linear-gradient(90deg, var(--ac-run-from,#2e7d6b), var(--ac-run-to,#3f9eff)); }
-      .acd-bar .handle { position:absolute; top:50%; right:0%; transform:translate(50%,-50%);
-        width:8px; height:40px; border-radius:6px; background:var(--ac-handle,#fff);
-        box-shadow:0 2px 6px rgba(0,0,0,.4); pointer-events:none; }
-      .acd-bar.running .handle { display:none; }
-      .acd-bar .ticks { position:relative; height:16px; margin-top:6px; }
-      .acd-bar .tick { position:absolute; transform:translateX(50%); font-size:.7rem;
-        color:var(--ac-sub, var(--secondary-text-color)); }
+      .acd-bar .cap-track { position:absolute; inset:0; border-radius:999px; background:var(--act-track-dark);
+        box-shadow:inset 0 2px 6px rgba(0,0,0,.55), inset 0 -1px 2px rgba(255,255,255,.05); }
+      .acd-bar .cap-fill { position:absolute; top:0; bottom:0; border-radius:999px; overflow:hidden;
+        background:linear-gradient(90deg, color-mix(in srgb, var(--act-active) 75%, black), var(--act-active));
+        box-shadow:0 0 16px var(--act-accent-glow); transition:width .45s ease, right .45s ease, left .45s ease; }
+      .acd-bar .cap-hl { position:absolute; top:3px; left:8px; right:8px; height:42%; border-radius:999px;
+        background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
+      .acd-bar .cap-dot { position:absolute; top:50%; width:22px; height:22px; border-radius:50%;
+        background:var(--act-accent-strong); box-shadow:0 0 14px var(--act-accent-glow), 0 0 5px var(--act-accent-strong);
+        transition:right .45s ease, left .45s ease; }
+      .acd-bar.running .cap-dot { width:18px; height:18px; }
     `,
     html(config) {
-      return `
-        <div class="acd acd-bar">
-          <div class="title">${escapeHtml(config.title)}</div>
-          <div class="track" id="drag"><div class="fill" id="fill"></div><div class="handle" id="handle"></div></div>
-          <div class="ticks">${ticksHtml(config, false)}</div>
-          <div class="readout"><div class="big" id="big">--</div><div class="sub" id="sub"></div></div>
-          <div class="cancel-wrap"><button class="btn-cancel" id="cancel">Cancel</button></div>
-        </div>`;
+      return `<div class="acd acd-bar">
+        ${headHtml(config)}
+        <div class="cap" id="drag">
+          <div class="cap-track"></div>
+          <div class="cap-fill" id="fill"><div class="cap-hl"></div></div>
+          <div class="cap-dot" id="dot"></div>
+        </div>
+        <div class="time" id="big">00:00:00</div>
+        <div class="chips">
+          <div class="chip"><span class="ic"><ha-icon icon="mdi:clock-outline"></ha-icon></span>
+            <span><span class="chip-l">Time left</span><span class="chip-v" id="tleft">—</span></span></div>
+          <div class="chip"><span class="ic"><ha-icon icon="mdi:calendar-clock"></ha-icon></span>
+            <span><span class="chip-l">Ends at</span><span class="chip-v" id="endsv">—</span></span></div>
+        </div>
+        ${cancelHtml()}
+      </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "fill", "handle", "big", "sub", "cancel", "acd:.acd"]);
+      const els = grabEls(root, ["drag", "fill", "dot", "big", "tleft", "endsv", "cancel", "acd|.acd"]);
+      const rtl = config.direction !== "ltr";
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min(1, (rect.right - ev.clientX) / rect.width));
+        const raw = rtl ? rect.right - ev.clientX : ev.clientX - rect.left;
+        const ratio = Math.max(0, Math.min(1, raw / rect.width));
         return clampMinutes(ratio * config.max_minutes, config);
       });
       els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
-    paint(els, snap) {
-      const running = snap.mode === "running" || snap.mode === "paused";
-      els.acd.classList.toggle("running", running);
-      els.fill.style.width = `${snap.frac * 100}%`;
-      els.handle.style.right = `${snap.frac * 100}%`;
-      els.big.textContent = bigText(snap);
-      els.sub.textContent = subText(snap);
-      els.cancel.style.display = running ? "" : "none";
+    paint(els, snap, config) {
+      const rtl = config.direction !== "ltr";
+      els.acd.classList.toggle("running", snap.running || snap.paused);
+      els.acd.classList.toggle("pulse", snap.pulse);
+      const pct = `${snap.frac * 100}%`;
+      if (rtl) {
+        els.fill.style.right = "0";
+        els.fill.style.left = "auto";
+        els.dot.style.right = pct;
+        els.dot.style.left = "auto";
+        els.dot.style.transform = "translate(50%,-50%)";
+      } else {
+        els.fill.style.left = "0";
+        els.fill.style.right = "auto";
+        els.dot.style.left = pct;
+        els.dot.style.right = "auto";
+        els.dot.style.transform = "translate(-50%,-50%)";
+      }
+      els.fill.style.width = pct;
+      els.tleft.textContent = fmtCoarse(snap.remainingSec);
+      els.endsv.textContent = snap.endsAt || "—";
+      paintShared(els, snap);
     },
   },
 
   vertical: {
     label: "Vertical bar",
     css: `
-      .acd-vertical .vwrap { display:flex; justify-content:center; gap:14px; }
-      .acd-vertical .track { position:relative; width:56px; height:190px; border-radius:14px;
-        background:var(--ac-track, color-mix(in srgb, var(--primary-text-color) 8%, transparent));
-        touch-action:none; cursor:pointer; user-select:none; }
-      .acd-vertical .fill { position:absolute; left:0; bottom:0; width:100%; height:0%;
-        border-radius:14px; transition:height .12s ease-out;
-        background:linear-gradient(0deg, var(--ac-acc, var(--primary-color,#3f9eff)), var(--ac-acc2,#7b61ff)); }
-      .acd-vertical.running .fill { transition:height .5s linear;
-        background:linear-gradient(0deg, var(--ac-run-from,#2e7d6b), var(--ac-run-to,#3f9eff)); }
-      .acd-vertical .handle { position:absolute; left:50%; bottom:0%; transform:translate(-50%,50%);
-        width:40px; height:8px; border-radius:6px; background:var(--ac-handle,#fff);
-        box-shadow:0 2px 6px rgba(0,0,0,.4); pointer-events:none; }
-      .acd-vertical.running .handle { display:none; }
-      .acd-vertical .ticks { position:relative; width:24px; height:190px; }
-      .acd-vertical .tick { position:absolute; transform:translateY(50%); font-size:.7rem;
-        color:var(--ac-sub, var(--secondary-text-color)); }
+      .acd-vertical .vstage { display:flex; justify-content:center; gap:16px; margin:16px 0 18px; }
+      .acd-vertical .vessel { position:relative; width:64px; height:210px; border-radius:32px; overflow:hidden;
+        background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+        border:1px solid var(--act-card-border);
+        box-shadow:inset 0 2px 10px rgba(0,0,0,.5), 0 0 18px var(--act-accent-glow);
+        backdrop-filter:blur(4px); touch-action:none; cursor:pointer; }
+      .acd-vertical .liquid { position:absolute; left:0; right:0; bottom:0; height:0%;
+        background:linear-gradient(180deg, color-mix(in srgb, var(--act-active) 78%, black), var(--act-active));
+        box-shadow:0 0 16px var(--act-accent-glow); transition:height .5s ease; }
+      .acd-vertical .liquid::before { content:""; position:absolute; top:-9px; left:-25%; width:150%; height:18px;
+        border-radius:45%; background:var(--act-active); animation:actwave 4s linear infinite; }
+      .acd-vertical .bubble { position:absolute; bottom:6px; width:6px; height:6px; border-radius:50%;
+        background:rgba(255,255,255,.5); animation:actbub 4.5s ease-in infinite; }
+      .acd-vertical .b2 { left:40%; width:4px; height:4px; animation-delay:1.4s; animation-duration:5.5s; }
+      .acd-vertical .b3 { left:65%; width:5px; height:5px; animation-delay:2.6s; animation-duration:6s; }
+      .acd-vertical .vscale { display:flex; flex-direction:column; justify-content:space-between;
+        padding:6px 0; font-size:.72rem; color:var(--act-text-muted); }
+      .acd-vertical .vscale span { display:flex; align-items:center; gap:6px; }
+      .acd-vertical .vscale span::before { content:""; width:10px; height:1px; background:var(--act-track); }
     `,
     html(config) {
-      return `
-        <div class="acd acd-vertical">
-          <div class="title">${escapeHtml(config.title)}</div>
-          <div class="vwrap">
-            <div class="ticks">${ticksHtml(config, true)}</div>
-            <div class="track" id="drag"><div class="fill" id="fill"></div><div class="handle" id="handle"></div></div>
+      return `<div class="acd acd-vertical">
+        ${headHtml(config)}
+        <div class="vstage">
+          <div class="vessel" id="drag">
+            <div class="liquid" id="fill">
+              <span class="bubble b1"></span><span class="bubble b2"></span><span class="bubble b3"></span>
+            </div>
           </div>
-          <div class="readout"><div class="big" id="big">--</div><div class="sub" id="sub"></div></div>
-          <div class="cancel-wrap"><button class="btn-cancel" id="cancel">Cancel</button></div>
-        </div>`;
+          <div class="vscale"><span>Full</span><span>Half</span><span>Low</span></div>
+        </div>
+        <div class="time" id="big">00:00:00</div>
+        ${endsHtml()}
+        ${cancelHtml()}
+      </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "fill", "handle", "big", "sub", "cancel", "acd:.acd"]);
+      const els = grabEls(root, ["drag", "fill", "big", "ends", "cancel", "acd|.acd"]);
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(1, (rect.bottom - ev.clientY) / rect.height));
@@ -202,52 +272,69 @@ const DESIGNS = {
       return els;
     },
     paint(els, snap) {
-      const running = snap.mode === "running" || snap.mode === "paused";
-      els.acd.classList.toggle("running", running);
+      els.acd.classList.toggle("running", snap.running || snap.paused);
+      els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.height = `${snap.frac * 100}%`;
-      els.handle.style.bottom = `${snap.frac * 100}%`;
-      els.big.textContent = bigText(snap);
-      els.sub.textContent = subText(snap);
-      els.cancel.style.display = running ? "" : "none";
+      paintShared(els, snap);
     },
   },
 
   dial: {
     label: "Radial dial",
-    R: 78,
+    R: 76,
     START: 135,
     SWEEP: 270,
     CY: 0.5,
     css: `
-      .acd-dial .dial-wrap { position:relative; width:100%; max-width:240px; margin:4px auto 0; }
-      .acd-dial svg { width:100%; display:block; touch-action:none; cursor:pointer; }
-      .acd-dial .track { fill:none; stroke:var(--ac-track, color-mix(in srgb, var(--primary-text-color) 12%, transparent)); stroke-width:16; stroke-linecap:round; }
-      .acd-dial .progress { fill:none; stroke:var(--ac-acc, var(--primary-color,#3f9eff)); stroke-width:16; stroke-linecap:round; transition:stroke .2s; }
-      .acd-dial.running .progress { stroke:var(--ac-run-from,#2e7d6b); }
-      .acd-dial .knob { fill:var(--ac-handle,#fff); stroke:rgba(0,0,0,.25); stroke-width:1; }
-      .acd-dial.running .knob { display:none; }
+      .acd-dial .dial-wrap { position:relative; width:100%; max-width:250px; margin:8px auto 4px; }
+      .acd-dial svg { width:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
+      .acd-dial .d-track { fill:none; stroke:var(--act-track); stroke-width:14; stroke-linecap:round; }
+      .acd-dial .d-prog { fill:none; stroke:var(--act-active); stroke-width:14; stroke-linecap:round;
+        transition:stroke-dashoffset .45s ease, stroke .3s; filter:drop-shadow(0 0 6px var(--act-accent-glow)); }
+      .acd-dial .tickline { stroke:var(--act-track); stroke-width:2; }
+      .acd-dial .d-knob { fill:var(--act-accent-strong); filter:drop-shadow(0 0 6px var(--act-accent-glow)); }
+      .acd-dial.running .d-knob { r:7; }
       .acd-dial .center { position:absolute; inset:0; display:flex; flex-direction:column;
-        align-items:center; justify-content:center; pointer-events:none; }
+        align-items:center; justify-content:center; gap:6px; pointer-events:none; }
     `,
     html(config) {
       const d = describeArc(100, 100, this.R, this.START, this.START + this.SWEEP);
-      return `
-        <div class="acd acd-dial">
-          <div class="title">${escapeHtml(config.title)}</div>
-          <div class="dial-wrap" id="drag">
-            <svg viewBox="0 0 200 200">
-              <path class="track" d="${d}"></path>
-              <path class="progress" id="progress" d=""></path>
-              <circle class="knob" id="knob" r="11" cx="100" cy="100"></circle>
-            </svg>
-            <div class="center"><div class="big" id="big">--</div><div class="sub" id="sub"></div></div>
+      let ticks = "";
+      const n = 40;
+      for (let i = 0; i <= n; i++) {
+        const a = this.START + (this.SWEEP * i) / n;
+        const p1 = polarToCartesian(100, 100, this.R + 12, a);
+        const p2 = polarToCartesian(100, 100, this.R + (i % 5 === 0 ? 18 : 15), a);
+        ticks += `<line class="tickline" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"></line>`;
+      }
+      return `<div class="acd acd-dial">
+        ${headHtml(config)}
+        <div class="dial-wrap" id="drag">
+          <svg viewBox="0 0 200 200">
+            ${ticks}
+            <path class="d-track" d="${d}"></path>
+            <path class="d-prog" id="prog" d="${d}"></path>
+            <circle class="d-knob" id="knob" r="9" cx="100" cy="100"></circle>
+          </svg>
+          <div class="center">
+            <div class="time" id="big">00:00:00</div>
+            ${statusHtml()}
+            ${endsHtml()}
           </div>
-          <div class="cancel-wrap"><button class="btn-cancel" id="cancel">Cancel</button></div>
-        </div>`;
+        </div>
+        ${cancelHtml()}
+      </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "progress", "knob", "big", "sub", "cancel", "acd:.acd"]);
+      const els = grabEls(root, ["drag", "prog", "knob", "big", "ends", "sdot", "stext", "cancel", "acd|.acd"]);
       const self = this;
+      els.progLen = 0;
+      try {
+        els.progLen = els.prog.getTotalLength();
+      } catch (e) {
+        els.progLen = (2 * Math.PI * self.R * self.SWEEP) / 360;
+      }
+      els.prog.style.strokeDasharray = els.progLen;
       api.attachDrag(els.drag, (ev) => {
         const f = angleToFraction(ev, els.drag, self.START, self.SWEEP, self.CY);
         return clampMinutes(f * config.max_minutes, config);
@@ -256,16 +343,14 @@ const DESIGNS = {
       return els;
     },
     paint(els, snap) {
-      const running = snap.mode === "running" || snap.mode === "paused";
-      els.acd.classList.toggle("running", running);
+      els.acd.classList.toggle("running", snap.running || snap.paused);
+      els.acd.classList.toggle("pulse", snap.pulse);
+      els.prog.style.strokeDashoffset = els.progLen * (1 - snap.frac);
       const end = this.START + snap.frac * this.SWEEP;
-      els.progress.setAttribute("d", describeArc(100, 100, this.R, this.START, end));
       const k = polarToCartesian(100, 100, this.R, end);
       els.knob.setAttribute("cx", k.x);
       els.knob.setAttribute("cy", k.y);
-      els.big.textContent = bigText(snap);
-      els.sub.textContent = subText(snap);
-      els.cancel.style.display = running ? "" : "none";
+      paintShared(els, snap);
     },
   },
 
@@ -274,37 +359,56 @@ const DESIGNS = {
     R: 82,
     START: 180,
     SWEEP: 180,
-    CY: 100 / 120,
+    CY: 100 / 118,
     css: `
-      .acd-arc .arc-wrap { position:relative; width:100%; max-width:260px; margin:4px auto 0; }
-      .acd-arc svg { width:100%; display:block; touch-action:none; cursor:pointer; }
-      .acd-arc .track { fill:none; stroke:var(--ac-track, color-mix(in srgb, var(--primary-text-color) 12%, transparent)); stroke-width:14; stroke-linecap:round; }
-      .acd-arc .progress { fill:none; stroke:var(--ac-acc, var(--primary-color,#3f9eff)); stroke-width:14; stroke-linecap:round; transition:stroke .2s; }
-      .acd-arc.running .progress { stroke:var(--ac-run-from,#2e7d6b); }
-      .acd-arc .knob { fill:var(--ac-handle,#fff); stroke:rgba(0,0,0,.25); stroke-width:1; }
-      .acd-arc.running .knob { display:none; }
-      .acd-arc .center { position:absolute; left:0; right:0; bottom:6%; display:flex; flex-direction:column;
-        align-items:center; justify-content:flex-end; pointer-events:none; }
+      .acd-arc .arc-wrap { position:relative; width:100%; max-width:280px; margin:8px auto 0; }
+      .acd-arc svg { width:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
+      .acd-arc .a-track { fill:none; stroke:var(--act-track); stroke-width:16; stroke-linecap:round; }
+      .acd-arc .a-prog { fill:none; stroke:var(--act-active); stroke-width:16; stroke-linecap:round;
+        transition:stroke-dashoffset .45s ease, stroke .3s; filter:drop-shadow(0 0 8px var(--act-accent-glow)); }
+      .acd-arc .tickline { stroke:var(--act-track); stroke-width:2; }
+      .acd-arc .a-dot { fill:var(--act-accent-strong); filter:drop-shadow(0 0 10px var(--act-accent-glow)); }
+      .acd-arc.running .a-dot { r:7; }
+      .acd-arc .center { position:absolute; left:0; right:0; bottom:4%; display:flex; flex-direction:column;
+        align-items:center; gap:5px; pointer-events:none; }
     `,
     html(config) {
       const d = describeArc(100, 100, this.R, this.START, this.START + this.SWEEP);
-      return `
-        <div class="acd acd-arc">
-          <div class="title">${escapeHtml(config.title)}</div>
-          <div class="arc-wrap" id="drag">
-            <svg viewBox="0 0 200 120">
-              <path class="track" d="${d}"></path>
-              <path class="progress" id="progress" d=""></path>
-              <circle class="knob" id="knob" r="10" cx="18" cy="100"></circle>
-            </svg>
-            <div class="center"><div class="big" id="big">--</div><div class="sub" id="sub"></div></div>
+      let ticks = "";
+      const n = 28;
+      for (let i = 0; i <= n; i++) {
+        const a = this.START + (this.SWEEP * i) / n;
+        const p1 = polarToCartesian(100, 100, this.R - 11, a);
+        const p2 = polarToCartesian(100, 100, this.R - (i % 7 === 0 ? 18 : 15), a);
+        ticks += `<line class="tickline" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"></line>`;
+      }
+      return `<div class="acd acd-arc">
+        ${headHtml(config)}
+        <div class="arc-wrap" id="drag">
+          <svg viewBox="0 0 200 118">
+            ${ticks}
+            <path class="a-track" d="${d}"></path>
+            <path class="a-prog" id="prog" d="${d}"></path>
+            <circle class="a-dot" id="knob" r="9" cx="18" cy="100"></circle>
+          </svg>
+          <div class="center">
+            <div class="time" id="big">00:00:00</div>
+            ${statusHtml()}
+            ${endsHtml()}
           </div>
-          <div class="cancel-wrap"><button class="btn-cancel" id="cancel">Cancel</button></div>
-        </div>`;
+        </div>
+        ${cancelHtml()}
+      </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "progress", "knob", "big", "sub", "cancel", "acd:.acd"]);
+      const els = grabEls(root, ["drag", "prog", "knob", "big", "ends", "sdot", "stext", "cancel", "acd|.acd"]);
       const self = this;
+      try {
+        els.progLen = els.prog.getTotalLength();
+      } catch (e) {
+        els.progLen = (2 * Math.PI * self.R * self.SWEEP) / 360;
+      }
+      els.prog.style.strokeDasharray = els.progLen;
       api.attachDrag(els.drag, (ev) => {
         const f = angleToFraction(ev, els.drag, self.START, self.SWEEP, self.CY);
         return clampMinutes(f * config.max_minutes, config);
@@ -313,111 +417,162 @@ const DESIGNS = {
       return els;
     },
     paint(els, snap) {
-      const running = snap.mode === "running" || snap.mode === "paused";
-      els.acd.classList.toggle("running", running);
+      els.acd.classList.toggle("running", snap.running || snap.paused);
+      els.acd.classList.toggle("pulse", snap.pulse);
+      els.prog.style.strokeDashoffset = els.progLen * (1 - snap.frac);
       const end = this.START + snap.frac * this.SWEEP;
-      els.progress.setAttribute("d", describeArc(100, 100, this.R, this.START, end));
       const k = polarToCartesian(100, 100, this.R, end);
       els.knob.setAttribute("cx", k.x);
       els.knob.setAttribute("cy", k.y);
-      els.big.textContent = bigText(snap);
-      els.sub.textContent = subText(snap);
-      els.cancel.style.display = running ? "" : "none";
+      paintShared(els, snap);
     },
   },
 
   stepper: {
     label: "Minimal stepper",
+    PRESETS: [5, 15, 25, 60],
     css: `
-      .acd-stepper .readout { margin-bottom:10px; }
-      .acd-stepper .controls { display:flex; align-items:center; gap:12px; margin:8px 0 12px; }
-      .acd-stepper .slider { flex:1; accent-color:var(--ac-acc, var(--primary-color,#3f9eff)); }
-      .acd-stepper .step-btn { width:42px; height:42px; border-radius:50%; border:none; cursor:pointer;
-        font-size:1.4rem; font-weight:700; line-height:1; font-family:inherit;
-        background:color-mix(in srgb, var(--ac-acc, var(--primary-color,#3f9eff)) 18%, transparent);
-        color:var(--ac-acc, var(--primary-color,#3f9eff)); }
-      .acd-stepper .start { display:block; width:100%; border:none; border-radius:12px; padding:12px;
-        font-size:1rem; font-weight:600; cursor:pointer; font-family:inherit; color:#fff;
-        background:var(--ac-acc, var(--primary-color,#3f9eff)); }
+      .acd-stepper .time { font-size:3rem; margin:6px 0 14px; }
+      .acd-stepper .sline { position:relative; height:6px; border-radius:999px; background:var(--act-track-dark);
+        margin:0 0 18px; box-shadow:inset 0 1px 3px rgba(0,0,0,.5); }
+      .acd-stepper .sline-fill { position:absolute; top:0; bottom:0; left:0; border-radius:999px;
+        background:var(--act-active); box-shadow:0 0 10px var(--act-accent-glow); transition:width .4s ease; }
+      .acd-stepper .sline-dot { position:absolute; top:50%; width:14px; height:14px; border-radius:50%;
+        background:var(--act-accent-strong); transform:translate(-50%,-50%); box-shadow:0 0 10px var(--act-accent-glow);
+        transition:left .4s ease; }
+      .acd-stepper .controls { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+      .acd-stepper .slider { flex:1; accent-color:var(--act-accent); }
+      .acd-stepper .step-btn { width:46px; height:46px; border-radius:16px; cursor:pointer; font-size:1.5rem;
+        line-height:1; font-family:inherit; color:var(--act-text); background:var(--act-btn-bg);
+        border:1px solid var(--act-btn-border); box-shadow:0 2px 6px rgba(0,0,0,.3); }
+      .acd-stepper .presets { display:flex; gap:8px; margin-bottom:16px; }
+      .acd-stepper .preset { flex:1; padding:9px 0; border-radius:14px; cursor:pointer; font-size:.85rem;
+        font-family:inherit; color:var(--act-text-2); background:var(--act-btn-bg); border:1px solid var(--act-btn-border); }
+      .acd-stepper .preset.sel { color:var(--act-accent); border-color:var(--act-accent);
+        background:color-mix(in srgb, var(--act-accent) 14%, transparent); }
+      .acd-stepper .start { display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+        border:none; border-radius:18px; padding:14px; font-size:1rem; font-weight:600; cursor:pointer;
+        font-family:inherit; color:#08120A;
+        background:linear-gradient(135deg, var(--act-accent-strong), var(--act-accent));
+        box-shadow:0 6px 18px var(--act-accent-glow); }
+      .acd-stepper .start ha-icon { --mdc-icon-size:20px; }
     `,
     html(config) {
-      const init = Math.min(Math.max(config.min_minutes, 30), config.max_minutes);
-      return `
-        <div class="acd acd-stepper">
-          <div class="title">${escapeHtml(config.title)}</div>
-          <div class="readout"><div class="big" id="big">--</div><div class="sub" id="sub"></div></div>
-          <div class="controls" id="controls">
-            <button class="step-btn" id="minus" aria-label="less">−</button>
-            <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}">
-            <button class="step-btn" id="plus" aria-label="more">+</button>
-          </div>
-          <button class="start" id="start">Start</button>
-          <div class="cancel-wrap"><button class="btn-cancel" id="cancel">Cancel</button></div>
-        </div>`;
+      const init = clampMinutes(Math.min(Math.max(config.min_minutes, 30), config.max_minutes), config);
+      const presets = this.PRESETS.filter((p) => p >= config.min_minutes && p <= config.max_minutes)
+        .map((p) => `<button class="preset" data-min="${p}" aria-label="${p} minutes">${p}</button>`)
+        .join("");
+      return `<div class="acd acd-stepper">
+        ${headHtml(config)}
+        <div class="time" id="big">00:00:00</div>
+        <div class="sline"><div class="sline-fill" id="fill"></div><div class="sline-dot" id="dot"></div></div>
+        <div class="controls">
+          <button class="step-btn" id="minus" aria-label="Decrease time">−</button>
+          <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}" aria-label="Set minutes">
+          <button class="step-btn" id="plus" aria-label="Increase time">+</button>
+        </div>
+        <div class="presets" id="presets">${presets}</div>
+        <button class="start" id="start" aria-label="Start session"><ha-icon icon="mdi:play"></ha-icon><span id="startlbl">Start session</span></button>
+        ${endsHtml()}
+        ${cancelHtml()}
+      </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["big", "sub", "controls", "minus", "plus", "slider", "start", "cancel", "acd:.acd"]);
+      const els = grabEls(root, ["big", "fill", "dot", "slider", "minus", "plus", "presets", "start", "startlbl", "ends", "cancel", "acd|.acd"]);
       const cur = () => clampMinutes(Number(els.slider.value), config);
-      els.minus.addEventListener("click", () => {
-        els.slider.value = clampMinutes(cur() - config.step, config);
+      const setVal = (m) => {
+        els.slider.value = clampMinutes(m, config);
         api.setValue(Number(els.slider.value));
+      };
+      els.minus.addEventListener("click", () => setVal(cur() - config.step));
+      els.plus.addEventListener("click", () => setVal(cur() + config.step));
+      els.slider.addEventListener("input", () => api.setValue(cur()));
+      els.presets.querySelectorAll(".preset").forEach((b) =>
+        b.addEventListener("click", () => setVal(Number(b.dataset.min)))
+      );
+      els.start.addEventListener("click", () => {
+        if (api.isRunning()) api.pause();
+        else if (api.isPaused()) api.resume();
+        else api.commit(cur());
       });
-      els.plus.addEventListener("click", () => {
-        els.slider.value = clampMinutes(cur() + config.step, config);
-        api.setValue(Number(els.slider.value));
-      });
-      els.slider.addEventListener("input", () => api.setValue(Number(els.slider.value)));
-      els.start.addEventListener("click", () => api.commit(cur()));
       els.cancel.addEventListener("click", () => api.cancelTimer());
       return els;
     },
     paint(els, snap) {
-      const running = snap.mode === "running" || snap.mode === "paused";
-      els.big.textContent = bigText(snap);
-      els.sub.textContent = running
-        ? subText(snap)
-        : "Set the time, then press Start";
-      if (!running) els.slider.value = snap.minutes;
-      els.controls.style.display = running ? "none" : "";
-      els.start.style.display = running ? "none" : "";
-      els.cancel.style.display = running ? "" : "none";
+      els.acd.classList.toggle("pulse", snap.pulse);
+      els.fill.style.width = `${snap.frac * 100}%`;
+      els.dot.style.left = `${snap.frac * 100}%`;
+      if (!snap.running && !snap.paused) els.slider.value = snap.minutes;
+      els.presets.querySelectorAll(".preset").forEach((b) =>
+        b.classList.toggle("sel", Number(b.dataset.min) === snap.minutes && !snap.running)
+      );
+      const running = snap.running;
+      els.startlbl.textContent = running ? "Pause session" : snap.paused ? "Resume" : "Start session";
+      els.start.querySelector("ha-icon").setAttribute("icon", running ? "mdi:pause" : "mdi:play");
+      els.start.setAttribute("aria-label", running ? "Pause session" : "Start session");
+      paintShared(els, snap);
     },
   },
 };
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str == null ? "" : String(str);
-  return div.innerHTML;
-}
-
-// Grab elements by id; entries like "name:.selector" use querySelector instead.
-function grabEls(root, names) {
-  const els = {};
-  for (const n of names) {
-    if (n.includes(":")) {
-      const [key, sel] = n.split(":");
-      els[key] = root.querySelector(sel);
-    } else {
-      els[n] = root.getElementById(n);
-    }
-  }
-  return els;
-}
-
+// Theme defaults + shared styles -------------------------------------------
 const BASE_STYLES = `
-  ha-card { padding:16px; }
-  .title { font-size:1.05rem; font-weight:600; margin-bottom:12px;
-    color:var(--ac-title, var(--primary-text-color)); }
-  .readout { text-align:center; }
-  .readout .big { font-size:2.1rem; font-weight:700; font-variant-numeric:tabular-nums;
-    color:var(--ac-value, var(--primary-text-color)); }
-  .readout .sub { font-size:.85rem; margin-top:2px; color:var(--ac-sub, var(--secondary-text-color)); }
-  .cancel-wrap { display:flex; justify-content:center; margin-top:12px; }
-  .btn-cancel { border:none; border-radius:12px; padding:10px 28px; font-weight:600; cursor:pointer; font-family:inherit;
-    background:color-mix(in srgb, var(--ac-cancel,#ff5252) 18%, transparent); color:var(--ac-cancel,#ff5252); }
-  .hint { padding:24px 12px; text-align:center; font-size:.95rem;
-    color:var(--ac-sub, var(--secondary-text-color)); }
+  :host {
+    --act-card-grad-start:#1D211D;
+    --act-card-grad-end:#101310;
+    --act-card-border:rgba(255,255,255,0.12);
+    --act-text:#F5F7F2;
+    --act-text-2:#9EA69A;
+    --act-text-muted:#6F776E;
+    --act-accent:#7ED957;
+    --act-accent-strong:#A6FF4D;
+    --act-accent-glow:color-mix(in srgb, var(--act-accent) 45%, transparent);
+    --act-track:rgba(255,255,255,0.12);
+    --act-track-dark:rgba(255,255,255,0.07);
+    --act-btn-bg:rgba(255,255,255,0.06);
+    --act-btn-border:rgba(255,255,255,0.14);
+    --act-warning:#FFD166;
+    --act-danger:#FF5C5C;
+    --act-active:var(--act-accent);
+  }
+  ha-card {
+    background:linear-gradient(160deg, var(--act-card-grad-start), var(--act-card-grad-end));
+    border:1px solid var(--act-card-border);
+    border-radius:24px;
+    padding:26px;
+    box-shadow:0 10px 34px rgba(0,0,0,0.38);
+    color:var(--act-text);
+  }
+  .head { margin-bottom:4px; }
+  .title { font-size:1.05rem; font-weight:700; color:var(--act-text); }
+  .label { font-size:.82rem; font-weight:500; color:var(--act-text-2); margin-top:2px; }
+  .time { text-align:center; font-size:2.6rem; font-weight:800; letter-spacing:.5px;
+    font-variant-numeric:tabular-nums; color:var(--act-text); }
+  .ends { text-align:center; font-size:.85rem; color:var(--act-text-2); margin-top:8px; }
+  .status { display:flex; align-items:center; justify-content:center; gap:8px; font-size:.85rem; color:var(--act-text-2); }
+  .status .dot { width:9px; height:9px; border-radius:50%; background:var(--act-active);
+    box-shadow:0 0 8px var(--act-accent-glow); }
+  .chips { display:flex; gap:10px; justify-content:center; margin-top:14px; }
+  .chip { display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:16px;
+    background:var(--act-btn-bg); border:1px solid var(--act-btn-border); }
+  .chip .ic { width:30px; height:30px; border-radius:50%; background:rgba(0,0,0,0.3);
+    display:flex; align-items:center; justify-content:center; --mdc-icon-size:17px; color:var(--act-accent); }
+  .chip-l { display:block; font-size:.68rem; color:var(--act-text-muted); }
+  .chip-v { display:block; font-size:.9rem; font-weight:600; color:var(--act-text); }
+  .cancel-wrap { display:flex; justify-content:center; margin-top:16px; }
+  .btn-cancel { border:1px solid var(--act-btn-border); border-radius:14px; padding:9px 28px; font-weight:600;
+    cursor:pointer; font-family:inherit; background:transparent; color:var(--act-danger); }
+  .hint { padding:26px 14px; text-align:center; font-size:.95rem; color:var(--act-text-2); }
+  .acd.pulse .cap-dot, .acd.pulse .cap-fill, .acd.pulse .liquid,
+  .acd.pulse .d-prog, .acd.pulse .d-knob, .acd.pulse .a-prog, .acd.pulse .a-dot,
+  .acd.pulse .sline-fill, .acd.pulse .sline-dot { animation:actpulse 1s ease-in-out infinite; }
+  @keyframes actpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+  @keyframes actwave { 0%{transform:translateX(0)} 100%{transform:translateX(33%)} }
+  @keyframes actbub { 0%{transform:translateY(0); opacity:0} 15%{opacity:.7} 100%{transform:translateY(-180px); opacity:0} }
+  @media (prefers-reduced-motion: reduce) {
+    .cap-fill,.cap-dot,.liquid,.d-prog,.a-prog,.sline-fill,.sline-dot { transition:none !important; }
+    .acd.pulse *, .liquid::before, .bubble { animation:none !important; }
+  }
 `;
 
 class AcTimerCard extends HTMLElement {
@@ -435,17 +590,15 @@ class AcTimerCard extends HTMLElement {
     this._config = { ...DEFAULT_CONFIG, ...config };
     this._render();
   }
-
   static getConfigElement() {
     return document.createElement("ac-timer-card-editor");
   }
-
   static getStubConfig() {
     return { design: "bar", max_minutes: 120 };
   }
-
   getCardSize() {
-    return this._config && (this._config.design === "dial" || this._config.design === "arc") ? 4 : 3;
+    const d = this._config && this._config.design;
+    return d === "dial" || d === "arc" || d === "stepper" ? 5 : 4;
   }
 
   set hass(hass) {
@@ -453,11 +606,9 @@ class AcTimerCard extends HTMLElement {
     this._maybeSubscribeFinish();
     this._updateView();
   }
-
   connectedCallback() {
     this._startTicking();
   }
-
   disconnectedCallback() {
     this._stopTicking();
     this._unsubscribeFinish();
@@ -470,14 +621,11 @@ class AcTimerCard extends HTMLElement {
     if (!this._hass || !this._hass.connection) return;
     this._hass.connection
       .subscribeEvents((ev) => {
-        if (ev.data && ev.data.entity_id === this._config.timer_entity) {
-          this._runFinishAction();
-        }
+        if (ev.data && ev.data.entity_id === this._config.timer_entity) this._runFinishAction();
       }, "timer.finished")
       .then((unsub) => (this._eventUnsub = unsub))
       .catch(() => {});
   }
-
   _unsubscribeFinish() {
     if (this._eventUnsub) {
       try {
@@ -488,7 +636,6 @@ class AcTimerCard extends HTMLElement {
       this._eventUnsub = null;
     }
   }
-
   _runFinishAction() {
     let actions = this._config.finish_action;
     if (!actions) return;
@@ -498,10 +645,9 @@ class AcTimerCard extends HTMLElement {
       const svc = a.action || a.service;
       if (!svc || !svc.includes(".")) continue;
       const [domain, service] = svc.split(".");
-      const data = { ...(a.data || {}) };
       let target = a.target;
       if (!target && a.entity_id) target = { entity_id: a.entity_id };
-      this._hass.callService(domain, service, data, target);
+      this._hass.callService(domain, service, { ...(a.data || {}) }, target);
     }
   }
 
@@ -521,12 +667,9 @@ class AcTimerCard extends HTMLElement {
   _remainingSeconds() {
     const s = this._stateObj();
     if (!s) return 0;
-    if (s.state === "active" && s.attributes.finishes_at) {
+    if (s.state === "active" && s.attributes.finishes_at)
       return Math.max(0, Math.round((new Date(s.attributes.finishes_at).getTime() - Date.now()) / 1000));
-    }
-    if (s.state === "paused" && s.attributes.remaining) {
-      return this._toSeconds(s.attributes.remaining);
-    }
+    if (s.state === "paused" && s.attributes.remaining) return this._toSeconds(s.attributes.remaining);
     return 0;
   }
   _configuredSeconds() {
@@ -540,46 +683,69 @@ class AcTimerCard extends HTMLElement {
     if (p.length === 2) return p[0] * 60 + p[1];
     return Number(str) || 0;
   }
-  _secondsToHMS(t) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(Math.floor(t / 3600))}:${pad(Math.floor((t % 3600) / 60))}:${pad(t % 60)}`;
-  }
 
   _snapshot() {
     const c = this._config;
     const running = this._isActive();
     const paused = this._isPaused();
-    let minutes, frac, remaining = 0, hms = "", mode;
+    let minutes, frac, remainingSec, endsAtMs, mode;
+
     if (this._adjusting && this._pendingMinutes != null) {
       minutes = this._pendingMinutes;
+      remainingSec = minutes * 60;
       frac = minutes / c.max_minutes;
+      endsAtMs = Date.now() + remainingSec * 1000;
       mode = "adjusting";
     } else if (running || paused) {
-      remaining = this._remainingSeconds();
-      frac = remaining / Math.max(1, this._configuredSeconds());
-      minutes = Math.ceil(remaining / 60);
-      hms = this._secondsToHMS(remaining);
+      remainingSec = this._remainingSeconds();
+      frac = remainingSec / Math.max(1, this._configuredSeconds());
+      minutes = Math.ceil(remainingSec / 60);
+      endsAtMs = running ? Date.now() + remainingSec * 1000 : null;
       mode = running ? "running" : "paused";
-    } else if (this._pendingMinutes != null) {
-      minutes = this._pendingMinutes;
-      frac = minutes / c.max_minutes;
-      mode = "idle";
     } else {
-      minutes = this._lastIdleMinutes != null ? this._lastIdleMinutes : Math.min(30, c.max_minutes);
+      minutes = this._pendingMinutes != null ? this._pendingMinutes : this._lastIdleMinutes != null ? this._lastIdleMinutes : Math.min(30, c.max_minutes);
+      remainingSec = minutes * 60;
       frac = minutes / c.max_minutes;
+      endsAtMs = Date.now() + remainingSec * 1000;
       mode = "idle";
     }
     frac = Math.max(0, Math.min(1, frac));
-    return { mode, minutes, frac, remaining, hms };
+
+    let status;
+    if (mode === "running") status = remainingSec <= 10 ? "Almost done" : remainingSec <= 60 ? "Finishes soon" : "Running";
+    else if (mode === "paused") status = "Paused";
+    else if (mode === "adjusting") status = "Release to start";
+    else status = "Ready";
+
+    // active color (warning / danger thresholds) — all from the theme.
+    let active = "var(--act-accent)";
+    if (running && remainingSec <= 10) active = "var(--act-danger)";
+    else if (running && remainingSec <= 60) active = "var(--act-warning)";
+    this.shadowRoot.host.style.setProperty("--act-active", active);
+
+    return {
+      mode,
+      running,
+      paused,
+      minutes,
+      frac,
+      remainingSec,
+      hms: fmtHMS(remainingSec),
+      endsAt: endsAtMs ? fmtClock(endsAtMs) : "",
+      status,
+      pulse: running && remainingSec <= 10,
+    };
   }
 
   _makeApi() {
     const card = this;
     return {
       config: card._config,
+      isRunning: () => card._isActive(),
+      isPaused: () => card._isPaused(),
       attachDrag(el, calcMinutes) {
         const move = (ev) => card._setPending(calcMinutes(ev));
-        const up = (ev) => {
+        const up = () => {
           el.removeEventListener("pointermove", move);
           el.removeEventListener("pointerup", up);
           el.removeEventListener("pointercancel", up);
@@ -608,6 +774,12 @@ class AcTimerCard extends HTMLElement {
         if (min != null) card._pendingMinutes = clampMinutes(min, card._config);
         card._commit();
       },
+      pause() {
+        card._hass.callService("timer", "pause", { entity_id: card._config.timer_entity });
+      },
+      resume() {
+        card._hass.callService("timer", "start", { entity_id: card._config.timer_entity });
+      },
       cancelTimer() {
         card._cancelTimer();
       },
@@ -617,12 +789,10 @@ class AcTimerCard extends HTMLElement {
   _canInteract() {
     return !!(this._hass && this._config.timer_entity && this._stateObj());
   }
-
   _setPending(min) {
     this._pendingMinutes = clampMinutes(min, this._config);
     this._updateView();
   }
-
   _commit() {
     this._adjusting = false;
     const m = this._pendingMinutes != null ? this._pendingMinutes : this._snapshot().minutes;
@@ -630,11 +800,10 @@ class AcTimerCard extends HTMLElement {
     if (m >= this._config.min_minutes) this._startTimer(m);
     this._updateView();
   }
-
   _startTimer(minutes) {
     this._hass.callService("timer", "start", {
       entity_id: this._config.timer_entity,
-      duration: this._secondsToHMS(minutes * 60),
+      duration: fmtHMS(minutes * 60),
     });
   }
   _cancelTimer() {
@@ -645,8 +814,7 @@ class AcTimerCard extends HTMLElement {
   _render() {
     const design = DESIGNS[this._config.design] || DESIGNS.bar;
     this._design = design;
-    this.shadowRoot.innerHTML = `
-      <style>${BASE_STYLES}\n${design.css}</style>
+    this.shadowRoot.innerHTML = `<style>${BASE_STYLES}\n${design.css}</style>
       <ha-card>
         <div class="hint" id="hint" style="display:none"></div>
         <div id="root">${design.html(this._config)}</div>
@@ -657,7 +825,6 @@ class AcTimerCard extends HTMLElement {
     this._designEls = design.wire(this.shadowRoot, this._makeApi(), this._config);
     this._updateView();
   }
-
   _applyColors() {
     const colors = this._config.colors || {};
     const host = this.shadowRoot.host;
@@ -667,14 +834,12 @@ class AcTimerCard extends HTMLElement {
       else host.style.removeProperty(cssVar);
     }
   }
-
   _showHint(msg) {
     if (!this._hintEl) return;
     this._hintEl.textContent = msg;
     this._hintEl.style.display = "";
     this._rootWrap.style.display = "none";
   }
-
   _updateView() {
     if (!this._design || !this._hintEl) return;
     if (!this._config.timer_entity) {
@@ -689,7 +854,6 @@ class AcTimerCard extends HTMLElement {
     this._rootWrap.style.display = "";
     this._design.paint(this._designEls, this._snapshot(), this._config);
   }
-
   _startTicking() {
     this._stopTicking();
     this._tickHandle = setInterval(() => {
@@ -709,15 +873,23 @@ customElements.define("ac-timer-card", AcTimerCard);
 /* ============================================================
  * Visual config editor
  * ============================================================ */
-const DESIGN_OPTIONS = Object.entries(DESIGNS).map(([value, d]) => ({
-  value,
-  label: d.label,
-}));
+const DESIGN_OPTIONS = Object.entries(DESIGNS).map(([value, d]) => ({ value, label: d.label }));
 
 const EDITOR_SCHEMA = [
   { name: "timer_entity", selector: { entity: { domain: "timer" } } },
   { name: "design", selector: { select: { mode: "dropdown", options: DESIGN_OPTIONS } } },
-  { name: "title", selector: { text: {} } },
+  {
+    name: "",
+    type: "grid",
+    schema: [
+      { name: "title", selector: { text: {} } },
+      { name: "label", selector: { text: {} } },
+    ],
+  },
+  { name: "direction", selector: { select: { mode: "dropdown", options: [
+    { value: "rtl", label: "Right → Left" },
+    { value: "ltr", label: "Left → Right" },
+  ] } } },
   { name: "finish_action", selector: { action: {} } },
   {
     name: "",
@@ -735,15 +907,15 @@ const EDITOR_SCHEMA = [
     icon: "mdi:palette",
     schema: [
       { name: "accent", selector: { color_rgb: {} } },
-      { name: "accent2", selector: { color_rgb: {} } },
-      { name: "running_from", selector: { color_rgb: {} } },
-      { name: "running_to", selector: { color_rgb: {} } },
-      { name: "track_bg", selector: { color_rgb: {} } },
-      { name: "handle", selector: { color_rgb: {} } },
-      { name: "value", selector: { color_rgb: {} } },
-      { name: "title_color", selector: { color_rgb: {} } },
-      { name: "sub", selector: { color_rgb: {} } },
-      { name: "cancel", selector: { color_rgb: {} } },
+      { name: "accent_strong", selector: { color_rgb: {} } },
+      { name: "card_grad_start", selector: { color_rgb: {} } },
+      { name: "card_grad_end", selector: { color_rgb: {} } },
+      { name: "card_border", selector: { color_rgb: {} } },
+      { name: "text", selector: { color_rgb: {} } },
+      { name: "text_secondary", selector: { color_rgb: {} } },
+      { name: "track", selector: { color_rgb: {} } },
+      { name: "warning", selector: { color_rgb: {} } },
+      { name: "danger", selector: { color_rgb: {} } },
     ],
   },
 ];
@@ -752,41 +924,45 @@ const EDITOR_LABELS = {
   timer_entity: "Timer entity",
   design: "Design",
   title: "Title",
+  label: "Label",
+  direction: "Direction",
   finish_action: "Action on finish",
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
   step: "Minute step",
   colors: "Colors",
-  accent: "Bar color",
-  accent2: "Bar gradient color",
-  running_from: "Bar color (running)",
-  running_to: "Bar gradient (running)",
-  track_bg: "Track background",
-  handle: "Drag handle",
-  value: "Countdown number",
-  title_color: "Title color",
-  sub: "Helper text",
-  cancel: "Cancel button",
+  accent: "Accent",
+  accent_strong: "Accent (bright)",
+  card_grad_start: "Card top",
+  card_grad_end: "Card bottom",
+  card_border: "Card border",
+  text: "Primary text",
+  text_secondary: "Secondary text",
+  track: "Track",
+  warning: "Warning",
+  danger: "Danger",
 };
 
 const EDITOR_HELPERS = {
   timer_entity: "The countdown timer this card controls. Pick one or create it in Settings → Helpers.",
   design: "Visual style of the timer.",
   title: "Name shown on the card.",
+  label: "Small label under the title (e.g. Runs in).",
+  direction: "Which side is zero for the bar fill.",
   finish_action: "Runs when the countdown ends.",
   max_minutes: "Longest time you can set.",
   min_minutes: "Shortest time that starts it.",
   step: "Drag snap, in minutes.",
-  accent: "Bar/arc color before start.",
-  accent2: "Gradient color before start (bar/vertical).",
-  running_from: "Bar/arc color while running.",
-  running_to: "Gradient color while running (bar/vertical).",
-  track_bg: "Empty track behind the bar/arc.",
-  handle: "The grip/knob you drag.",
-  value: "Big countdown number.",
-  title_color: "Title text color.",
-  sub: "Small text + minute labels.",
-  cancel: "Cancel button color.",
+  accent: "Main timer color (fill / ring / liquid).",
+  accent_strong: "Brighter accent for the glow dot.",
+  card_grad_start: "Card background — top of the gradient.",
+  card_grad_end: "Card background — bottom of the gradient.",
+  card_border: "Card border color.",
+  text: "Main text and the big countdown.",
+  text_secondary: "Labels and secondary text.",
+  track: "The empty track behind the fill / ring.",
+  warning: "Color used under 1 minute left.",
+  danger: "Color used under 10 seconds left.",
 };
 
 class AcTimerCardEditor extends HTMLElement {
@@ -795,15 +971,11 @@ class AcTimerCardEditor extends HTMLElement {
     this._render();
     this._ensureTimer();
   }
-
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
     this._ensureTimer();
   }
-
-  // Best-effort auto-create of a timer helper. Falls back silently to the
-  // Timer entity picker (which is now the first field) if not permitted.
   async _ensureTimer() {
     if (!this._hass || !this._config) return;
     if (this._config.timer_entity || this._creatingTimer) return;
@@ -821,13 +993,11 @@ class AcTimerCardEditor extends HTMLElement {
       if (entityId) {
         this._config = { ...this._config, timer_entity: entityId };
         if (this._form) this._form.data = this._config;
-        this.dispatchEvent(
-          new CustomEvent("config-changed", {
-            detail: { config: this._config },
-            bubbles: true,
-            composed: true,
-          })
-        );
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        }));
       }
     } catch (e) {
       console.warn("ac-timer-card: auto-create timer unavailable; pick one in 'Timer entity'.", e);
@@ -835,7 +1005,6 @@ class AcTimerCardEditor extends HTMLElement {
       this._creatingTimer = false;
     }
   }
-
   _render() {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     if (!this._form) {
@@ -844,13 +1013,11 @@ class AcTimerCardEditor extends HTMLElement {
       this._form.computeHelper = (s) => EDITOR_HELPERS[s.name] || "";
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
-        this.dispatchEvent(
-          new CustomEvent("config-changed", {
-            detail: { config: ev.detail.value },
-            bubbles: true,
-            composed: true,
-          })
-        );
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: ev.detail.value },
+          bubbles: true,
+          composed: true,
+        }));
       });
       this.shadowRoot.innerHTML = "";
       this.shadowRoot.appendChild(this._form);
@@ -860,20 +1027,18 @@ class AcTimerCardEditor extends HTMLElement {
     this._form.data = this._config;
   }
 }
-
 customElements.define("ac-timer-card-editor", AcTimerCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "ac-timer-card",
   name: "AC Timer Card",
-  description:
-    "A drag-to-set countdown timer with multiple designs, full color control, and a configurable finish action.",
+  description: "A premium drag-to-set countdown timer with five designs, full color control, and a configurable finish action.",
   preview: false,
 });
 
 console.info(
   `%c AC-TIMER-CARD %c v${CARD_VERSION} `,
-  "color: white; background: #3f9eff; font-weight: 700;",
-  "color: #3f9eff; background: #1c1c1c;"
+  "color: white; background: #7ED957; font-weight: 700;",
+  "color: #7ED957; background: #1c1c1c;"
 );
