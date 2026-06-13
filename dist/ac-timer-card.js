@@ -21,7 +21,7 @@
  * No build step required: this is a plain custom element.
  */
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.4.0";
 
 const DEFAULT_CONFIG = {
   title: "AC Shutoff Timer",
@@ -66,10 +66,8 @@ class AcTimerCard extends HTMLElement {
   }
 
   // ---- Lovelace config ----
+  // timer_entity is optional: the visual editor auto-creates one on setup.
   setConfig(config) {
-    if (!config.timer_entity) {
-      throw new Error("You must define 'timer_entity' (a timer entity)");
-    }
     this._config = { ...DEFAULT_CONFIG, ...config };
     this._render();
   }
@@ -279,6 +277,16 @@ class AcTimerCard extends HTMLElement {
 
   _updateView() {
     if (!this._els) return;
+
+    if (!this._config.timer_entity) {
+      this._els.big.textContent = "—";
+      this._els.sub.textContent = "Open the card editor to finish setup";
+      this._els.cancel.style.display = "none";
+      this._els.fill.style.width = "0%";
+      this._els.handle.style.right = "0%";
+      return;
+    }
+
     const max = this._config.max_minutes;
     const active = this._isActive();
     const paused = this._isPaused();
@@ -352,7 +360,7 @@ class AcTimerCard extends HTMLElement {
   }
 
   _onPointerDown(ev) {
-    if (!this._hass) return;
+    if (!this._hass || !this._config.timer_entity) return;
     ev.preventDefault();
     this._dragging = true;
     this._dragMinutes = this._minutesFromEvent(ev);
@@ -533,8 +541,8 @@ customElements.define("ac-timer-card", AcTimerCard);
  * ============================================================ */
 
 const EDITOR_SCHEMA = [
-  { name: "timer_entity", required: true, selector: { entity: { domain: "timer" } } },
   { name: "title", selector: { text: {} } },
+  { name: "finish_action", selector: { action: {} } },
   {
     name: "",
     type: "grid",
@@ -543,10 +551,6 @@ const EDITOR_SCHEMA = [
       { name: "min_minutes", selector: { number: { min: 1, max: 240, mode: "box", unit_of_measurement: "min" } } },
       { name: "step", selector: { number: { min: 1, max: 60, mode: "box", unit_of_measurement: "min" } } },
     ],
-  },
-  {
-    name: "finish_action",
-    selector: { action: {} },
   },
   {
     name: "colors",
@@ -564,6 +568,15 @@ const EDITOR_SCHEMA = [
       { name: "title_color", selector: { color_rgb: {} } },
       { name: "sub", selector: { color_rgb: {} } },
       { name: "cancel", selector: { color_rgb: {} } },
+    ],
+  },
+  {
+    // Advanced: the timer entity is auto-created, but can be overridden here.
+    type: "expandable",
+    title: "Advanced",
+    icon: "mdi:cog",
+    schema: [
+      { name: "timer_entity", selector: { entity: { domain: "timer" } } },
     ],
   },
 ];
@@ -592,11 +605,60 @@ class AcTimerCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = config;
     this._render();
+    this._ensureTimer();
   }
 
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
+    this._ensureTimer();
+  }
+
+  // Auto-create a dedicated timer helper the first time the card is set up,
+  // so the user never has to create one manually. Falls back silently to the
+  // Advanced -> Timer entity picker if creation isn't permitted.
+  async _ensureTimer() {
+    if (!this._hass || !this._config) return;
+    if (this._config.timer_entity || this._creatingTimer) return;
+    this._creatingTimer = true;
+    try {
+      const base = (this._config.title || "AC Timer").trim() || "AC Timer";
+      const name = `${base} ${Math.random().toString(36).slice(2, 6)}`;
+      const created = await this._hass.callWS({
+        type: "timer/create",
+        name,
+        restore: true,
+      });
+      let entityId = created && created.entity_id;
+      if (!entityId && created && created.id) {
+        const reg = await this._hass.callWS({
+          type: "config/entity_registry/list",
+        });
+        const found = reg.find(
+          (e) => e.platform === "timer" && e.unique_id === created.id
+        );
+        entityId = found && found.entity_id;
+      }
+      if (entityId) {
+        this._config = { ...this._config, timer_entity: entityId };
+        if (this._form) this._form.data = this._config;
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "ac-timer-card: could not auto-create a timer helper; " +
+          "set one under Advanced -> Timer entity.",
+        e
+      );
+    } finally {
+      this._creatingTimer = false;
+    }
   }
 
   _render() {
