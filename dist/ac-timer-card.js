@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
+  ends_show: true,
+  ends_width: "chip", // "chip" (small) or "full" (full-width row)
+  ends_size: 13, // px
 };
 
 // config.colors.<slot> -> CSS variable. All optional; theme defaults live in CSS.
@@ -128,8 +131,18 @@ function headHtml(config) {
       <div class="label" id="label">${escapeHtml(config.label || "")}</div>
     </div>`;
 }
-function endsHtml() {
+function endsHtml(config) {
+  if (config && config.ends_show === false) return "";
   return `<div class="ends" id="ends"></div>`;
+}
+// Horizontal-bar "Ends at" element with user-chosen size and width.
+function barEndsHtml(config) {
+  if (config.ends_show === false) return "";
+  const full = config.ends_width === "full";
+  const fs = Number(config.ends_size) || 13;
+  return `<div class="ends-row"><div class="ends-box${full ? " full" : ""}" id="endsbox" style="font-size:${fs}px">
+      <span class="ic"><ha-icon icon="mdi:calendar-clock"></ha-icon></span><span id="endsv">—</span>
+    </div></div>`;
 }
 function statusHtml() {
   return `<div class="status"><span class="dot" id="sdot"></span><span id="stext"></span></div>`;
@@ -165,6 +178,12 @@ const DESIGNS = {
         background:var(--act-accent-strong); box-shadow:0 0 14px var(--act-accent-glow), 0 0 5px var(--act-accent-strong);
         transition:right .45s ease, left .45s ease; }
       .acd-bar.running .cap-dot { width:18px; height:18px; }
+      .acd-bar .ends-row { display:flex; justify-content:center; margin-top:14px; }
+      .acd-bar .ends-box { display:inline-flex; align-items:center; gap:10px; padding:9px 16px; border-radius:16px;
+        background:var(--act-btn-bg); border:1px solid var(--act-btn-border); color:var(--act-text-2); }
+      .acd-bar .ends-box.full { display:flex; width:100%; justify-content:center; }
+      .acd-bar .ends-box .ic { width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.3);
+        display:flex; align-items:center; justify-content:center; color:var(--act-accent); --mdc-icon-size:16px; flex:none; }
     `,
     html(config) {
       return `<div class="acd acd-bar">
@@ -175,17 +194,12 @@ const DESIGNS = {
           <div class="cap-dot" id="dot"></div>
         </div>
         <div class="time" id="big">00:00:00</div>
-        <div class="chips">
-          <div class="chip"><span class="ic"><ha-icon icon="mdi:clock-outline"></ha-icon></span>
-            <span><span class="chip-l">Time left</span><span class="chip-v" id="tleft">—</span></span></div>
-          <div class="chip"><span class="ic"><ha-icon icon="mdi:calendar-clock"></ha-icon></span>
-            <span><span class="chip-l">Ends at</span><span class="chip-v" id="endsv">—</span></span></div>
-        </div>
+        ${barEndsHtml(config)}
         ${cancelHtml()}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["drag", "fill", "dot", "big", "tleft", "endsv", "cancel", "acd|.acd"]);
+      const els = grabEls(root, ["drag", "fill", "dot", "big", "endsv", "cancel", "acd|.acd"]);
       const rtl = config.direction !== "ltr";
       api.attachDrag(els.drag, (ev) => {
         const rect = els.drag.getBoundingClientRect();
@@ -215,8 +229,7 @@ const DESIGNS = {
         els.dot.style.transform = "translate(-50%,-50%)";
       }
       els.fill.style.width = pct;
-      els.tleft.textContent = fmtCoarse(snap.remainingSec);
-      els.endsv.textContent = snap.endsAt || "—";
+      if (els.endsv) els.endsv.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "—";
       paintShared(els, snap);
     },
   },
@@ -256,7 +269,7 @@ const DESIGNS = {
           <div class="vscale"><span>Full</span><span>Half</span><span>Low</span></div>
         </div>
         <div class="time" id="big">00:00:00</div>
-        ${endsHtml()}
+        ${endsHtml(config)}
         ${cancelHtml()}
       </div>`;
     },
@@ -318,7 +331,7 @@ const DESIGNS = {
           <div class="center">
             <div class="time" id="big">00:00:00</div>
             ${statusHtml()}
-            ${endsHtml()}
+            ${endsHtml(config)}
           </div>
         </div>
         ${cancelHtml()}
@@ -398,7 +411,7 @@ const DESIGNS = {
         </div>
         <div class="presets" id="presets">${presets}</div>
         <button class="start" id="start" aria-label="Start session"><ha-icon icon="mdi:play"></ha-icon><span id="startlbl">Start session</span></button>
-        ${endsHtml()}
+        ${endsHtml(config)}
         ${cancelHtml()}
       </div>`;
     },
@@ -836,6 +849,19 @@ const EDITOR_SCHEMA = [
     ],
   },
   {
+    type: "expandable",
+    title: "“Ends at” display",
+    icon: "mdi:calendar-clock",
+    schema: [
+      { name: "ends_show", selector: { boolean: {} } },
+      { name: "ends_width", selector: { select: { mode: "dropdown", options: [
+        { value: "chip", label: "Small chip" },
+        { value: "full", label: "Full width" },
+      ] } } },
+      { name: "ends_size", selector: { number: { min: 10, max: 48, mode: "slider", unit_of_measurement: "px" } } },
+    ],
+  },
+  {
     name: "colors",
     type: "expandable",
     title: "Colors",
@@ -865,17 +891,20 @@ const EDITOR_LABELS = {
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
   step: "Minute step",
+  ends_show: "Show “Ends at”",
+  ends_width: "“Ends at” width",
+  ends_size: "“Ends at” text size",
   colors: "Colors",
-  accent: "Accent",
-  accent_strong: "Accent (bright)",
-  card_grad_start: "Card top",
-  card_grad_end: "Card bottom",
-  card_border: "Card border",
-  text: "Primary text",
-  text_secondary: "Secondary text",
-  track: "Track",
-  warning: "Warning",
-  danger: "Danger",
+  accent: "Timer color",
+  accent_strong: "Glowing dot color",
+  card_grad_start: "Card background — top",
+  card_grad_end: "Card background — bottom",
+  card_border: "Card outline",
+  text: "Big time + title color",
+  text_secondary: "Small text color",
+  track: "Empty (unfilled) color",
+  warning: "Last-minute color",
+  danger: "Last-10-seconds color",
 };
 
 const EDITOR_HELPERS = {
@@ -888,16 +917,19 @@ const EDITOR_HELPERS = {
   max_minutes: "Longest time you can set.",
   min_minutes: "Shortest time that starts it.",
   step: "Drag snap, in minutes.",
-  accent: "Main timer color (fill / ring / liquid).",
-  accent_strong: "Brighter accent for the glow dot.",
-  card_grad_start: "Card background — top of the gradient.",
-  card_grad_end: "Card background — bottom of the gradient.",
-  card_border: "Card border color.",
-  text: "Main text and the big countdown.",
-  text_secondary: "Labels and secondary text.",
-  track: "The empty track behind the fill / ring.",
-  warning: "Color used under 1 minute left.",
-  danger: "Color used under 10 seconds left.",
+  ends_show: "Show the end time under the bar.",
+  ends_width: "A small chip, or a full-width row.",
+  ends_size: "Font size of the end time, in pixels.",
+  accent: "The main filled part — the bar fill, the ring, or the liquid.",
+  accent_strong: "The bright dot at the tip of the fill, and its glow.",
+  card_grad_start: "Top color of the card background.",
+  card_grad_end: "Bottom color of the card background (makes the gradient).",
+  card_border: "The thin line around the whole card.",
+  text: "The big countdown digits and the card title.",
+  text_secondary: "The label under the title, “Ends at”, and the status text.",
+  track: "The empty part of the bar/ring that isn't filled yet.",
+  warning: "The fill turns this color when under 1 minute is left.",
+  danger: "The fill turns this color when under 10 seconds are left.",
 };
 
 class AcTimerCardEditor extends HTMLElement {
