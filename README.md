@@ -10,12 +10,6 @@ Instead of fixed 30 / 45 / 60-minute buttons, you just **drag the bar to any dur
 - **Reliable** — it keeps running even when the app is closed or the phone is locked.
 - **Generic** — the card only starts/stops the timer and shows it; *what happens at the end* is a script / scene / automation you choose.
 
-```
-drag to set ──▶ timer.start (server) ──▶ live countdown for everyone
-                                              │ timer.finished
-                                              ▼
-                                   your script / scene / automation
-```
 
 ---
 
