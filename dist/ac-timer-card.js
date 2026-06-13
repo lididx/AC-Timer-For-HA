@@ -1,11 +1,10 @@
 /**
  * AC Timer For HA — a premium draggable countdown card for Home Assistant.
  *
- * One card, five designs (set via the `design` option):
+ * One card, four designs (set via the `design` option):
  *   - bar      : horizontal premium capsule
  *   - vertical : glass liquid vessel
  *   - dial     : countdown ring
- *   - arc      : speedometer gauge
  *   - stepper  : compact control panel
  *
  * Shared logic: drag/set minutes, start a server-side `timer` entity, show the
@@ -18,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -354,80 +353,6 @@ const DESIGNS = {
     },
   },
 
-  arc: {
-    label: "Arc gauge",
-    R: 82,
-    START: 180,
-    SWEEP: 180,
-    CY: 100 / 118,
-    css: `
-      .acd-arc .arc-wrap { position:relative; width:100%; max-width:280px; margin:8px auto 0; }
-      .acd-arc svg { width:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
-      .acd-arc .a-track { fill:none; stroke:var(--act-track); stroke-width:16; stroke-linecap:round; }
-      .acd-arc .a-prog { fill:none; stroke:var(--act-active); stroke-width:16; stroke-linecap:round;
-        transition:stroke-dashoffset .45s ease, stroke .3s; filter:drop-shadow(0 0 8px var(--act-accent-glow)); }
-      .acd-arc .tickline { stroke:var(--act-track); stroke-width:2; }
-      .acd-arc .a-dot { fill:var(--act-accent-strong); filter:drop-shadow(0 0 10px var(--act-accent-glow)); }
-      .acd-arc.running .a-dot { r:7; }
-      .acd-arc .center { position:absolute; left:0; right:0; bottom:4%; display:flex; flex-direction:column;
-        align-items:center; gap:5px; pointer-events:none; }
-    `,
-    html(config) {
-      const d = describeArc(100, 100, this.R, this.START, this.START + this.SWEEP);
-      let ticks = "";
-      const n = 28;
-      for (let i = 0; i <= n; i++) {
-        const a = this.START + (this.SWEEP * i) / n;
-        const p1 = polarToCartesian(100, 100, this.R - 11, a);
-        const p2 = polarToCartesian(100, 100, this.R - (i % 7 === 0 ? 18 : 15), a);
-        ticks += `<line class="tickline" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"></line>`;
-      }
-      return `<div class="acd acd-arc">
-        ${headHtml(config)}
-        <div class="arc-wrap" id="drag">
-          <svg viewBox="0 0 200 118">
-            ${ticks}
-            <path class="a-track" d="${d}"></path>
-            <path class="a-prog" id="prog" d="${d}"></path>
-            <circle class="a-dot" id="knob" r="9" cx="18" cy="100"></circle>
-          </svg>
-          <div class="center">
-            <div class="time" id="big">00:00:00</div>
-            ${statusHtml()}
-            ${endsHtml()}
-          </div>
-        </div>
-        ${cancelHtml()}
-      </div>`;
-    },
-    wire(root, api, config) {
-      const els = grabEls(root, ["drag", "prog", "knob", "big", "ends", "sdot", "stext", "cancel", "acd|.acd"]);
-      const self = this;
-      try {
-        els.progLen = els.prog.getTotalLength();
-      } catch (e) {
-        els.progLen = (2 * Math.PI * self.R * self.SWEEP) / 360;
-      }
-      els.prog.style.strokeDasharray = els.progLen;
-      api.attachDrag(els.drag, (ev) => {
-        const f = angleToFraction(ev, els.drag, self.START, self.SWEEP, self.CY);
-        return clampMinutes(f * config.max_minutes, config);
-      });
-      els.cancel.addEventListener("click", () => api.cancelTimer());
-      return els;
-    },
-    paint(els, snap) {
-      els.acd.classList.toggle("running", snap.running || snap.paused);
-      els.acd.classList.toggle("pulse", snap.pulse);
-      els.prog.style.strokeDashoffset = els.progLen * (1 - snap.frac);
-      const end = this.START + snap.frac * this.SWEEP;
-      const k = polarToCartesian(100, 100, this.R, end);
-      els.knob.setAttribute("cx", k.x);
-      els.knob.setAttribute("cy", k.y);
-      paintShared(els, snap);
-    },
-  },
-
   stepper: {
     label: "Minimal stepper",
     PRESETS: [5, 15, 25, 60],
@@ -563,6 +488,9 @@ const BASE_STYLES = `
   .btn-cancel { border:1px solid var(--act-btn-border); border-radius:14px; padding:9px 28px; font-weight:600;
     cursor:pointer; font-family:inherit; background:transparent; color:var(--act-danger); }
   .hint { padding:26px 14px; text-align:center; font-size:.95rem; color:var(--act-text-2); }
+  .acd.dragging .cap-fill, .acd.dragging .cap-dot, .acd.dragging .liquid,
+  .acd.dragging .d-prog, .acd.dragging .d-knob,
+  .acd.dragging .sline-fill, .acd.dragging .sline-dot { transition:none !important; }
   .acd.pulse .cap-dot, .acd.pulse .cap-fill, .acd.pulse .liquid,
   .acd.pulse .d-prog, .acd.pulse .d-knob, .acd.pulse .a-prog, .acd.pulse .a-dot,
   .acd.pulse .sline-fill, .acd.pulse .sline-dot { animation:actpulse 1s ease-in-out infinite; }
@@ -598,7 +526,7 @@ class AcTimerCard extends HTMLElement {
   }
   getCardSize() {
     const d = this._config && this._config.design;
-    return d === "dial" || d === "arc" || d === "stepper" ? 5 : 4;
+    return d === "dial" || d === "stepper" ? 5 : 4;
   }
 
   set hass(hass) {
@@ -852,7 +780,14 @@ class AcTimerCard extends HTMLElement {
     }
     this._hintEl.style.display = "none";
     this._rootWrap.style.display = "";
-    this._design.paint(this._designEls, this._snapshot(), this._config);
+    const snap = this._snapshot();
+    // Disable CSS transitions while dragging so the fill/handle tracks the
+    // pointer with zero lag (important on touch). Transitions stay on for the
+    // live countdown.
+    if (this._designEls && this._designEls.acd) {
+      this._designEls.acd.classList.toggle("dragging", snap.mode === "adjusting");
+    }
+    this._design.paint(this._designEls, snap, this._config);
   }
   _startTicking() {
     this._stopTicking();
@@ -1033,7 +968,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "ac-timer-card",
   name: "AC Timer Card",
-  description: "A premium drag-to-set countdown timer with five designs, full color control, and a configurable finish action.",
+  description: "A premium drag-to-set countdown timer with multiple designs, full color control, and a configurable finish action.",
   preview: false,
 });
 
