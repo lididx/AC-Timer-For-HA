@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.7.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -247,8 +247,7 @@ const DESIGNS = {
         ${headHtml(config)}
         <div class="cap" id="drag">
           <div class="cap-track"></div>
-          ${fxHtml(config)}
-          <div class="cap-fill" id="fill"><div class="cap-hl"></div></div>
+          <div class="cap-fill" id="fill"><div class="cap-hl"></div>${fxHtml(config)}</div>
           <div class="cap-dot" id="dot"></div>
         </div>
         <div class="time" id="big">00:00:00</div>
@@ -270,23 +269,27 @@ const DESIGNS = {
       const rtl = config.direction !== "ltr";
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
-      const pct = `${snap.frac * 100}%`;
-      // Seat the glow dot just inside the fill's leading edge so it reads as a
-      // bright head attached to the bar, not a floating dot beyond it.
+      els.fill.style.width = `${snap.frac * 100}%`;
+
+      // Place the glow dot on the fill's leading edge, but clamp it so it stays
+      // fully inside the track — at 0 it rests exactly on the zero line.
+      const capW = els.drag.getBoundingClientRect().width || 1;
+      const dotW = snap.running || snap.paused ? 18 : 26;
+      const half = dotW / 2;
+      const center = Math.max(half, Math.min(capW - half, snap.frac * capW));
+      const edge = center - half;
       if (rtl) {
         els.fill.style.right = "0";
         els.fill.style.left = "auto";
-        els.dot.style.right = pct;
+        els.dot.style.right = `${edge}px`;
         els.dot.style.left = "auto";
-        els.dot.style.transform = "translate(100%,-50%)";
       } else {
         els.fill.style.left = "0";
         els.fill.style.right = "auto";
-        els.dot.style.left = pct;
+        els.dot.style.left = `${edge}px`;
         els.dot.style.right = "auto";
-        els.dot.style.transform = "translate(-100%,-50%)";
       }
-      els.fill.style.width = pct;
+      els.dot.style.transform = "translateY(-50%)";
       if (els.endsv) els.endsv.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "—";
       paintShared(els, snap);
     },
@@ -316,8 +319,7 @@ const DESIGNS = {
         ${headHtml(config)}
         <div class="vstage">
           <div class="vessel" id="drag">
-              <div class="liquid" id="fill"></div>
-            ${fxHtml(config)}
+              <div class="liquid" id="fill">${fxHtml(config)}</div>
           </div>
           <div class="vscale"><span>Full</span><span>Half</span><span>Low</span></div>
         </div>
@@ -444,7 +446,7 @@ const DESIGNS = {
       return `<div class="acd acd-stepper">
         ${headHtml(config)}
         <div class="time" id="big">00:00:00</div>
-        <div class="sline">${fxHtml(config)}<div class="sline-fill" id="fill"></div><div class="sline-dot" id="dot"></div></div>
+        <div class="sline"><div class="sline-fill" id="fill">${fxHtml(config)}</div><div class="sline-dot" id="dot"></div></div>
         <div class="controls">
           <button class="step-btn" id="minus" aria-label="Decrease time">−</button>
           <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}" aria-label="Set minutes">
@@ -583,11 +585,14 @@ const BASE_STYLES = `
   .fx-frost .p { width:6px; height:6px; border-radius:50%; background:#fff; opacity:.2; filter:blur(.4px);
     animation:fxfall linear infinite; }
   @keyframes fxfall { 0%{top:-20%;opacity:0} 20%{opacity:.26} 100%{top:120%;opacity:0} }
-  /* Per-design layering: keep the fill/handle above the ambient layer */
-  .acd-bar .cap-track { z-index:0; } .acd-bar .fx { z-index:2; } .acd-bar .cap-fill { z-index:1; } .acd-bar .cap-dot { z-index:3; }
-  .acd-vertical .liquid { z-index:1; } .acd-vertical .fx { z-index:2; }
-  .acd-dial .fx { z-index:0; border-radius:50%; } .acd-dial svg { position:relative; z-index:1; } .acd-dial .center { z-index:2; }
-  .acd-stepper .sline-fill { z-index:1; } .acd-stepper .fx { z-index:2; } .acd-stepper .sline-dot { z-index:3; }
+  /* The FX lives INSIDE the colored fill, so the animation only plays on the
+     progressing line and shrinks with it; the static track stays clean. */
+  .acd-bar .cap-track { z-index:0; } .acd-bar .cap-fill { z-index:1; } .acd-bar .cap-dot { z-index:3; }
+  .acd-vertical .liquid { z-index:1; overflow:hidden; }
+  .acd-stepper .sline-fill { z-index:1; overflow:hidden; } .acd-stepper .sline-dot { z-index:3; }
+  .acd-dial svg { position:relative; z-index:1; } .acd-dial .center { z-index:2; }
+  .acd-dial .fx { z-index:0; -webkit-mask:radial-gradient(circle closest-side at 50% 50%, transparent 0 66%, #000 71% 86%, transparent 91%);
+    mask:radial-gradient(circle closest-side at 50% 50%, transparent 0 66%, #000 71% 86%, transparent 91%); }
 
   @media (prefers-reduced-motion: reduce) {
     .cap-fill,.cap-dot,.liquid,.d-prog,.d-knob,.sline-fill,.sline-dot { transition:none !important; }
