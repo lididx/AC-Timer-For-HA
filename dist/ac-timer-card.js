@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.14.0";
+const CARD_VERSION = "1.14.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -701,6 +701,11 @@ class AcTimerCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // When the timer returns to idle (cancelled or finished), forget any pending
+    // value so the card resets to a clean zero instead of the last-set position.
+    const running = this._isActive() || this._isPaused();
+    if (this._wasRunning && !running && !this._adjusting) this._pendingMinutes = null;
+    this._wasRunning = running;
     this._maybeSubscribeFinish();
     this._updateView();
   }
