@@ -21,10 +21,10 @@
  * No build step required: this is a plain custom element.
  */
 
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.3.0";
 
 const DEFAULT_CONFIG = {
-  title: "טיימר כיבוי מזגן",
+  title: "AC Shutoff Timer",
   max_minutes: 120,
   min_minutes: 1,
   step: 1,
@@ -68,7 +68,7 @@ class AcTimerCard extends HTMLElement {
   // ---- Lovelace config ----
   setConfig(config) {
     if (!config.timer_entity) {
-      throw new Error("חובה להגדיר 'timer_entity' (ישות מסוג timer)");
+      throw new Error("You must define 'timer_entity' (a timer entity)");
     }
     this._config = { ...DEFAULT_CONFIG, ...config };
     this._render();
@@ -223,7 +223,7 @@ class AcTimerCard extends HTMLElement {
         </div>
 
         <div class="actions">
-          <button class="btn cancel" id="cancel">ביטול</button>
+          <button class="btn cancel" id="cancel">Cancel</button>
         </div>
       </ha-card>
     `;
@@ -307,14 +307,14 @@ class AcTimerCard extends HTMLElement {
     if (running) {
       const remaining = this._remainingSeconds();
       this._els.big.textContent = this._secondsToHMS(remaining);
-      this._els.sub.textContent = paused ? "מושהה" : "כיבוי בעוד";
+      this._els.sub.textContent = paused ? "Paused" : "Runs in";
       this.shadowRoot.host.classList.add("is-running");
       this._els.cancel.style.display = "";
     } else {
-      this._els.big.textContent = `${minutes} דק׳`;
+      this._els.big.textContent = `${minutes} min`;
       this._els.sub.textContent = this._dragging
-        ? "שחרר כדי להפעיל"
-        : "גרור כדי להגדיר";
+        ? "Release to start"
+        : "Drag to set";
       this.shadowRoot.host.classList.remove("is-running");
       this._els.cancel.style.display = "none";
     }
@@ -411,7 +411,6 @@ class AcTimerCard extends HTMLElement {
 
   _styles() {
     return `
-      :host { direction: rtl; }
       ha-card {
         padding: 16px;
         display: flex;
@@ -552,7 +551,7 @@ const EDITOR_SCHEMA = [
   {
     name: "colors",
     type: "expandable",
-    title: "צבעים",
+    title: "Colors",
     icon: "mdi:palette",
     schema: [
       { name: "accent", selector: { color_rgb: {} } },
@@ -570,23 +569,23 @@ const EDITOR_SCHEMA = [
 ];
 
 const EDITOR_LABELS = {
-  timer_entity: "ישות הטיימר (timer)",
-  title: "כותרת",
-  max_minutes: "דקות מקסימום",
-  min_minutes: "דקות מינימום",
-  step: "קפיצת דקות",
-  finish_action: "פעולה בסיום הספירה",
-  colors: "צבעים",
-  accent: "מילוי — צבע א׳",
-  accent2: "מילוי — צבע ב׳",
-  running_from: "ספירה פעילה — צבע א׳",
-  running_to: "ספירה פעילה — צבע ב׳",
-  track_bg: "רקע הפס",
-  handle: "ידית הגרירה",
-  value: "צבע המספר",
-  title_color: "צבע הכותרת",
-  sub: "צבע טקסט משני",
-  cancel: "כפתור ביטול",
+  timer_entity: "Timer entity",
+  title: "Title",
+  max_minutes: "Max minutes",
+  min_minutes: "Min minutes",
+  step: "Minute step",
+  finish_action: "Action on finish",
+  colors: "Colors",
+  accent: "Fill — color 1",
+  accent2: "Fill — color 2",
+  running_from: "Running — color 1",
+  running_to: "Running — color 2",
+  track_bg: "Track background",
+  handle: "Drag handle",
+  value: "Number color",
+  title_color: "Title color",
+  sub: "Secondary text",
+  cancel: "Cancel button",
 };
 
 class AcTimerCardEditor extends HTMLElement {
@@ -631,7 +630,8 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "ac-timer-card",
   name: "AC Timer Card",
-  description: "טיימר כיבוי הניתן לגרירה, עם שליטה בצבעים ופעולת סיום מתכווננת",
+  description:
+    "A drag-to-set countdown timer with full color control and a configurable finish action.",
   preview: false,
 });
 

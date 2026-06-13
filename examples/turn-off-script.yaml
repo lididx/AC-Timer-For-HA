@@ -1,24 +1,21 @@
 # ─────────────────────────────────────────────────────────────
-# Example turn-off script — mirrors your existing AC scripts.
+# Example finish script — whatever you want to run when the timer ends.
+# Point the card's `finish_action` (or the example automation) at this.
 #
-# Just like "מזגן סלון קור 24" turns on a scene and then updates
-# input_text.salon_ac_status, this script turns the AC OFF and updates
-# the same status helper so the UI status line shows "המזגן כבוי".
-#
-# If you already have a turn-off script, use that instead and point the
-# automation's entity_id at it. This is only a reference.
+# This sample turns a device off via a scene and updates a status helper,
+# but it can be anything: a scene, an IR command, a notification, etc.
 # ─────────────────────────────────────────────────────────────
 
-ac_turn_off:
-  alias: כיבוי מזגן סלון
+ac_off:
+  alias: Turn AC off
   sequence:
-    # 👉 Replace with YOUR off scene / IR command.
+    # 👉 Replace with your own off scene / IR command.
     - target:
         entity_id: scene.air_off
       action: scene.turn_on
-    # Update the status helper shown in the UI.
+    # Optional: update a status helper shown in the UI.
     - data:
-        entity_id: input_text.salon_ac_status
-        value: המזגן כבוי
+        entity_id: input_text.ac_status
+        value: "AC is off"
       action: input_text.set_value
   mode: single

@@ -1,33 +1,22 @@
 # ─────────────────────────────────────────────────────────────
-# Automation — runs the AC turn-off when the timer finishes.
+# Optional server-side automation — runs the finish action even when no
+# dashboard is open. Use this INSTEAD of the card's `finish_action` if you
+# need guaranteed, exactly-once execution regardless of any open client.
 #
-# This is what actually turns off the air conditioner. The card only
-# starts/cancels the timer; the turn-off happens here, server-side, so it
-# fires even if the app/phone is closed.
-#
-# It calls your existing turn-off script, which (like your other AC scripts)
-# also updates input_text.salon_ac_status so the status line in the UI shows
-# "המזגן כבוי".
-#
-# Add via Settings → Automations → ⋮ → Edit in YAML, or paste into
-# automations.yaml. Replace the script entity_id with YOUR turn-off script.
+# Add via Settings -> Automations -> ⋮ -> Edit in YAML, or paste into
+# automations.yaml. Replace the script entity_id with your own.
 # ─────────────────────────────────────────────────────────────
 
-- id: ac_timer_finished_turn_off
-  alias: "AC Timer — כיבוי מזגן בסיום הטיימר"
+- id: ac_timer_finished
+  alias: "AC Timer — run action on finish"
   trigger:
     - platform: event
       event_type: timer.finished
       event_data:
         entity_id: timer.ac_off
   action:
-    # 👉 Replace with YOUR existing turn-off script (the one that also
-    #    sets input_text.salon_ac_status to "המזגן כבוי").
+    # 👉 Replace with your own script/scene/automation.
     - service: script.turn_on
       target:
-        entity_id: script.ac_turn_off
-    # Optional: notify yourself
-    # - service: notify.mobile_app_your_phone
-    #   data:
-    #     message: "המזגן כובה על ידי הטיימר"
+        entity_id: script.your_off_script
   mode: single

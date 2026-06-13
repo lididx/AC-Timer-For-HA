@@ -1,15 +1,15 @@
 # ─────────────────────────────────────────────────────────────
 # Timer helper — the server-side countdown the card controls.
 #
-# Option A (UI):  Settings → Devices & Services → Helpers → Create Helper → Timer
-#                 Name it e.g. "AC Off"  →  entity_id becomes timer.ac_off
+# Option A (UI):  Settings -> Devices & Services -> Helpers -> Create Helper -> Timer
+#                 Name it e.g. "AC Off"  ->  entity_id becomes timer.ac_off
 #
 # Option B (YAML): add the block below to configuration.yaml, then restart HA.
 # ─────────────────────────────────────────────────────────────
 
 timer:
   ac_off:
-    name: כיבוי מזגן
+    name: AC Off
     # No fixed duration — the card supplies the duration on timer.start.
     # restore: true keeps the countdown running across HA restarts.
     restore: true
