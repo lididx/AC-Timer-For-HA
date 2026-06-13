@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.8.0";
+const CARD_VERSION = "1.8.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -726,7 +726,10 @@ class AcTimerCard extends HTMLElement {
       mode = "adjusting";
     } else if (running || paused) {
       remainingSec = this._remainingSeconds();
-      frac = remainingSec / Math.max(1, this._configuredSeconds());
+      // Absolute scale: the fill maps remaining minutes onto the 0..max range,
+      // so a timer started at 60 (of 120) begins at the 60 mark and counts down
+      // from there — it stays where the handle was released.
+      frac = remainingSec / (c.max_minutes * 60);
       minutes = Math.ceil(remainingSec / 60);
       endsAtMs = running ? Date.now() + remainingSec * 1000 : null;
       mode = running ? "running" : "paused";
