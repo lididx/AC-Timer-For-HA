@@ -21,7 +21,7 @@
  * No build step required: this is a plain custom element.
  */
 
-const CARD_VERSION = "0.5.0";
+const CARD_VERSION = "0.5.1";
 
 const DEFAULT_CONFIG = {
   title: "AC Shutoff Timer",
@@ -591,48 +591,44 @@ const EDITOR_SCHEMA = [
 ];
 
 const EDITOR_LABELS = {
-  timer_entity: "Timer entity",
   title: "Title",
+  finish_action: "Action on finish",
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
   step: "Minute step",
-  finish_action: "Action on finish",
   colors: "Colors",
-  accent: "Fill — color 1",
-  accent2: "Fill — color 2",
-  running_from: "Running — color 1",
-  running_to: "Running — color 2",
+  accent: "Bar color",
+  accent2: "Bar gradient color",
+  running_from: "Bar color (running)",
+  running_to: "Bar gradient (running)",
   track_bg: "Track background",
   handle: "Drag handle",
-  value: "Number color",
+  value: "Countdown number",
   title_color: "Title color",
-  sub: "Secondary text",
+  sub: "Helper text",
   cancel: "Cancel button",
+  timer_entity: "Timer entity",
 };
 
-// Per-field descriptions shown under each control in the visual editor.
+// Very short English descriptions shown under each control in the editor.
 const EDITOR_HELPERS = {
-  title: "Card title shown at the top.",
-  finish_action:
-    "What runs when the countdown reaches zero (e.g. your AC-off script).",
-  max_minutes: "Minutes at the far end of the bar (the maximum you can drag to).",
-  min_minutes: "Smallest value that will start the timer.",
-  step: "Drag snapping, in minutes (e.g. 1 = whole minutes, 5 = steps of 5).",
-  timer_entity:
-    "Auto-created for you. Only change this if you want to use your own timer helper.",
+  title: "Name shown on the card.",
+  finish_action: "Runs when the countdown ends.",
+  max_minutes: "Longest time you can set.",
+  min_minutes: "Shortest time that starts it.",
+  step: "Drag snap, in minutes.",
+  timer_entity: "Auto-created. Override only if needed.",
   // Colors
-  accent: "Main fill color of the bar BEFORE the timer starts (while setting).",
-  accent2:
-    "Second gradient color of the bar before start. Set it equal to the main color for a solid (non-gradient) fill.",
-  running_from: "Main fill color of the bar WHILE the countdown is running.",
-  running_to:
-    "Second gradient color while running. Set it equal to the main color for a solid fill.",
-  track_bg: "The empty track behind the bar.",
-  handle: "The white grip you drag to set the time.",
-  value: "The big number / countdown time in the center.",
-  title_color: "The card title text color.",
-  sub: "Small helper text (e.g. 'Drag to set') and the minute labels under the bar.",
-  cancel: "The Cancel button shown while the countdown is running.",
+  accent: "Bar color before start.",
+  accent2: "Bar gradient before start.",
+  running_from: "Bar color while running.",
+  running_to: "Bar gradient while running.",
+  track_bg: "Empty track behind the bar.",
+  handle: "The grip you drag.",
+  value: "Big countdown number.",
+  title_color: "Title text color.",
+  sub: "Small text + minute labels.",
+  cancel: "Cancel button color.",
 };
 
 class AcTimerCardEditor extends HTMLElement {
