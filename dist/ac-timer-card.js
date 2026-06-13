@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.8.1";
+const CARD_VERSION = "1.9.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -48,6 +48,10 @@ const COLOR_VARS = {
   track: "--act-track",
   warning: "--act-warning",
   danger: "--act-danger",
+  ends_time: "--act-ends-time",
+  preset_text: "--act-preset-text",
+  preset_bg: "--act-preset-bg",
+  preset_border: "--act-preset-border",
 };
 
 function colorToCss(c) {
@@ -129,10 +133,12 @@ function grabEls(root, names) {
 
 // Shared UI fragments -------------------------------------------------------
 function headHtml(config) {
-  return `<div class="head">
-      <div class="title">${escapeHtml(config.title)}</div>
-      <div class="label" id="label">${escapeHtml(config.label || "")}</div>
-    </div>`;
+  const label = config.label ? `<div class="label">${escapeHtml(config.label)}</div>` : "";
+  return `<div class="head"><div class="title">${escapeHtml(config.title)}</div>${label}</div>`;
+}
+// "Ends at HH:MM" with the time in its own (configurable) color.
+function endsMarkup(endsAt) {
+  return endsAt ? `Ends at <span class="ends-time">${endsAt}</span>` : "";
 }
 function endsHtml(config) {
   if (config && config.ends_show === false) return "";
@@ -211,7 +217,7 @@ function presetsHtml(config) {
 
 function paintShared(els, snap) {
   if (els.big) els.big.textContent = snap.hms;
-  if (els.ends) els.ends.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "";
+  if (els.ends) els.ends.innerHTML = endsMarkup(snap.endsAt);
   if (els.stext) els.stext.textContent = snap.status;
 }
 
@@ -290,7 +296,7 @@ const DESIGNS = {
         els.dot.style.right = "auto";
       }
       els.dot.style.transform = "translateY(-50%)";
-      if (els.endsv) els.endsv.textContent = snap.endsAt ? `Ends at ${snap.endsAt}` : "—";
+      if (els.endsv) els.endsv.innerHTML = snap.endsAt ? endsMarkup(snap.endsAt) : "—";
       paintShared(els, snap);
     },
   },
@@ -508,6 +514,10 @@ const BASE_STYLES = `
     --act-btn-border:rgba(255,255,255,0.12);
     --act-warning:#F2C14E;
     --act-danger:#E2685F;
+    --act-ends-time:var(--act-accent);
+    --act-preset-text:var(--act-text);
+    --act-preset-bg:var(--act-btn-bg);
+    --act-preset-border:var(--act-btn-border);
     --act-active:var(--act-accent);
   }
   ha-card {
@@ -527,6 +537,7 @@ const BASE_STYLES = `
   .time { text-align:center; font-size:2.6rem; font-weight:800; letter-spacing:.5px;
     font-variant-numeric:tabular-nums; color:var(--act-text); }
   .ends { text-align:center; font-size:.85rem; color:var(--act-text-2); margin-top:8px; }
+  .ends-time { color:var(--act-ends-time); font-weight:700; }
   .status { display:flex; align-items:center; justify-content:center; gap:8px; font-size:.85rem; color:var(--act-text-2); }
   .status .dot { width:9px; height:9px; border-radius:50%; background:var(--act-active);
     box-shadow:0 0 8px var(--act-accent-glow); }
@@ -540,9 +551,9 @@ const BASE_STYLES = `
   .presets { display:flex; gap:8px; margin-top:14px; }
   .preset { flex:1; display:flex; align-items:baseline; justify-content:center; gap:2px; padding:10px 0;
     border-radius:14px; cursor:pointer; font-size:1rem; font-weight:700; font-family:inherit;
-    color:var(--act-text); background:var(--act-btn-bg); border:1px solid var(--act-btn-border); transition:all .15s; }
+    color:var(--act-preset-text); background:var(--act-preset-bg); border:1px solid var(--act-preset-border); transition:all .15s; }
   .preset:hover { border-color:var(--act-accent); }
-  .preset .preset-u { font-size:.62rem; font-weight:500; color:var(--act-text-2); }
+  .preset .preset-u { font-size:.62rem; font-weight:500; opacity:.7; }
   .preset.sel { color:var(--act-accent); border-color:var(--act-accent);
     background:color-mix(in srgb, var(--act-accent) 14%, transparent); }
   .preset.sel .preset-u { color:var(--act-accent); }
@@ -989,6 +1000,7 @@ const EDITOR_SCHEMA = [
           { name: "ends_size", selector: { number: { min: 10, max: 48, mode: "slider", unit_of_measurement: "px" } } },
         ],
       },
+      { name: "ends_time", selector: { color_rgb: {} } },
     ],
   },
   {
@@ -1018,6 +1030,15 @@ const EDITOR_SCHEMA = [
         { value: "20", label: "20" }, { value: "30", label: "30" }, { value: "45", label: "45" },
         { value: "60", label: "60" }, { value: "90", label: "90" }, { value: "120", label: "120" },
       ] } } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "preset_text", selector: { color_rgb: {} } },
+          { name: "preset_bg", selector: { color_rgb: {} } },
+          { name: "preset_border", selector: { color_rgb: {} } },
+        ],
+      },
     ],
   },
   {
@@ -1053,6 +1074,10 @@ const EDITOR_LABELS = {
   step: "Minute step",
   presets_show: "Show favorite times",
   presets: "Favorite times (min)",
+  preset_text: "Chip number",
+  preset_bg: "Chip background",
+  preset_border: "Chip border",
+  ends_time: "“Ends at” time color",
   ends_show: "Show “Ends at”",
   ends_width: "“Ends at” width",
   ends_size: "“Ends at” text size",
@@ -1082,6 +1107,10 @@ const EDITOR_HELPERS = {
   step: "Drag snap, in minutes.",
   presets_show: "Show the favorite-time chips below the timer.",
   presets: "Tap a chip to start that time instantly. Type any number to add your own.",
+  preset_text: "Number color on the favorite chips.",
+  preset_bg: "Background of the favorite chips.",
+  preset_border: "Border of the favorite chips.",
+  ends_time: "Color of the end-time number (e.g. 21:17). Defaults to the accent.",
   ends_show: "Show the end time under the bar.",
   ends_width: "A small chip, or a full-width row.",
   ends_size: "Font size of the end time, in pixels.",
