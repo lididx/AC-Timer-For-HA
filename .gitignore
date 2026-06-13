@@ -1,0 +1,13 @@
+# Claude Code local config
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Node (not used for build, but just in case)
+node_modules/
+npm-debug.log*

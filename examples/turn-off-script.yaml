@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────
+# Example turn-off script — mirrors your existing AC scripts.
+#
+# Just like "מזגן סלון קור 24" turns on a scene and then updates
+# input_text.salon_ac_status, this script turns the AC OFF and updates
+# the same status helper so the UI status line shows "המזגן כבוי".
+#
+# If you already have a turn-off script, use that instead and point the
+# automation's entity_id at it. This is only a reference.
+# ─────────────────────────────────────────────────────────────
+
+ac_turn_off:
+  alias: כיבוי מזגן סלון
+  sequence:
+    # 👉 Replace with YOUR off scene / IR command.
+    - target:
+        entity_id: scene.air_off
+      action: scene.turn_on
+    # Update the status helper shown in the UI.
+    - data:
+        entity_id: input_text.salon_ac_status
+        value: המזגן כבוי
+      action: input_text.set_value
+  mode: single
