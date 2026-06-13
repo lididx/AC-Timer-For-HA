@@ -8,7 +8,7 @@ The countdown runs **server-side** (a `timer` entity), so it's shared across eve
 
 1. **HACS** → ⋮ → **Custom repositories** → add this repo, category **Lovelace** → Install.
 2. Edit your dashboard → **Add Card** → **AC Timer Card**.
-3. In the card editor, pick **Action on finish** (the script/scene/automation to run) and your colors.
+3. In the card editor, pick **Run on finish** (the script/scene/automation to run) and your colors.
 
 That's it. No helpers to create, no YAML to write — the card creates its own timer behind the scenes. Drag to set the minutes, release to start.
 

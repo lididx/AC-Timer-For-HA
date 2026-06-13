@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.10.0";
+const CARD_VERSION = "1.11.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -664,10 +664,13 @@ class AcTimerCard extends HTMLElement {
     this._unsubscribeFinish();
   }
 
-  // ---- finish_action ----
+  // ---- finish action ----
+  _hasFinish() {
+    return !!(this._config && (this._config.finish_entity || this._config.finish_action));
+  }
   _maybeSubscribeFinish() {
     if (this._eventUnsub) return;
-    if (!this._config || !this._config.finish_action) return;
+    if (!this._hasFinish()) return;
     if (!this._hass || !this._hass.connection) return;
     this._hass.connection
       .subscribeEvents((ev) => {
@@ -687,6 +690,14 @@ class AcTimerCard extends HTMLElement {
     }
   }
   _runFinishAction() {
+    // Simple path: a picked script / scene / automation entity.
+    const ent = this._config.finish_entity;
+    if (ent && ent.includes(".")) {
+      const domain = ent.split(".")[0];
+      const service = domain === "automation" ? "trigger" : "turn_on";
+      this._hass.callService(domain, service, {}, { entity_id: ent });
+    }
+    // Advanced path: explicit service-call action(s) via YAML.
     let actions = this._config.finish_action;
     if (!actions) return;
     if (!Array.isArray(actions)) actions = [actions];
@@ -981,7 +992,7 @@ const EDITOR_SCHEMA = [
       { name: "style", selector: { select: { mode: "dropdown", options: STYLE_OPTIONS } } },
     ],
   },
-  { name: "finish_action", selector: { action: {} } },
+  { name: "finish_entity", selector: { entity: { domain: ["script", "scene", "automation"] } } },
   {
     type: "expandable",
     title: "Appearance",
@@ -1085,6 +1096,14 @@ const EDITOR_SCHEMA = [
       { name: "danger", selector: { color_rgb: {} } },
     ],
   },
+  {
+    type: "expandable",
+    title: "Advanced",
+    icon: "mdi:cog-outline",
+    schema: [
+      { name: "finish_action", selector: { object: {} } },
+    ],
+  },
 ];
 
 const EDITOR_LABELS = {
@@ -1095,7 +1114,8 @@ const EDITOR_LABELS = {
   label: "Label",
   direction: "Direction",
   handle_style: "Handle",
-  finish_action: "Action on finish",
+  finish_entity: "Run on finish",
+  finish_action: "Custom action (YAML)",
   max_minutes: "Max minutes",
   min_minutes: "Min minutes",
   step: "Minute step",
@@ -1129,7 +1149,8 @@ const EDITOR_HELPERS = {
   label: "Small label under the title (e.g. Runs in).",
   direction: "Which side is zero for the bar fill.",
   handle_style: "Marker on the bar's leading edge (Horizontal bar).",
-  finish_action: "Runs when the countdown ends.",
+  finish_entity: "Script, scene, or automation to run when the timer ends.",
+  finish_action: "Optional: explicit service-call action(s) in YAML, instead of the entity above.",
   max_minutes: "Longest time you can set.",
   min_minutes: "Shortest time that starts it.",
   step: "Drag snap, in minutes.",
