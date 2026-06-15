@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.16.0";
+const CARD_VERSION = "1.16.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -38,6 +38,7 @@ const DEFAULT_CONFIG = {
   presets: ["15", "30", "45", "60"],
   presets_show: true,
   ends_show: true,
+  ends_idle_show: false, // show "Ends at" while the timer is idle (not running)
   ends_label: "Ends at",
   ends_icon: "mdi:calendar-clock",
   ends_icon_show: true,
@@ -1011,6 +1012,11 @@ class AcTimerCard extends HTMLElement {
     }
     this._design.paint(this._designEls, snap, this._config);
 
+    // "Ends at" is hidden while idle unless the user opts in.
+    const showEnds = snap.running || snap.paused || this._config.ends_idle_show;
+    const endsEl = this.shadowRoot.querySelector(".ends-row") || this.shadowRoot.getElementById("ends");
+    if (endsEl) endsEl.style.display = showEnds ? "" : "none";
+
     // Shared controls. Start shows once a value is set (and not running);
     // Cancel shows while running or when there's a value to clear.
     const running = snap.running || snap.paused;
@@ -1108,7 +1114,14 @@ const EDITOR_SCHEMA = [
           { name: "slide_hint_speed", selector: { number: { min: 0.5, max: 8, step: 0.5, mode: "slider", unit_of_measurement: "s" } } },
         ],
       },
-      { name: "ends_show", selector: { boolean: {} } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "ends_show", selector: { boolean: {} } },
+          { name: "ends_idle_show", selector: { boolean: {} } },
+        ],
+      },
       { name: "ends_label", selector: { text: {} } },
       {
         name: "",
@@ -1240,6 +1253,7 @@ const EDITOR_LABELS = {
   preset_border: "Chip border",
   ends_time: "“Ends at” time color",
   ends_show: "Show “Ends at”",
+  ends_idle_show: "Show in idle",
   ends_width: "“Ends at” width",
   ends_size: "“Ends at” text size",
   colors: "Colors",
@@ -1285,6 +1299,7 @@ const EDITOR_HELPERS = {
   preset_border: "Border of the favorite chips.",
   ends_time: "Color of the end-time number (e.g. 21:17). Defaults to the accent.",
   ends_show: "Show the end time under the bar.",
+  ends_idle_show: "Also show it while the timer is idle (not running).",
   ends_width: "A small chip, or a full-width row.",
   ends_size: "Font size of the end time, in pixels.",
   accent: "The main filled part — the bar fill, the ring, or the liquid.",
