@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.15.0";
+const CARD_VERSION = "1.16.0";
 
 const DEFAULT_CONFIG = {
   design: "bar",
@@ -222,8 +222,12 @@ function fxHtml(config) {
   }
   return `<div class="fx fx-${s}">${inner}</div>`;
 }
-function cancelHtml() {
-  return `<div class="cancel-wrap"><button class="btn-cancel" id="cancel" aria-label="Cancel timer">Cancel</button></div>`;
+// Shared controls row: Start (begin the countdown) + Cancel (stop / clear).
+function controlsHtml() {
+  return `<div class="controls-row">
+      <button class="btn-start" id="start" aria-label="Start timer">Start</button>
+      <button class="btn-cancel" id="cancel" aria-label="Cancel timer">Cancel</button>
+    </div>`;
 }
 
 // User-defined favorite times -> a clean, deduped, in-range list of minutes.
@@ -348,7 +352,7 @@ const DESIGNS = {
       const rtl = config.direction !== "ltr";
       els.acd.classList.toggle("running", snap.running || snap.paused);
       els.acd.classList.toggle("pulse", snap.pulse);
-      els.acd.classList.toggle("idle", snap.mode === "idle");
+      els.acd.classList.toggle("idle", snap.mode === "idle" && !snap.hasPending);
       els.fill.style.width = `${snap.frac * 100}%`;
 
       // Center the chosen handle on the fill's leading edge, clamped so it stays
@@ -530,12 +534,11 @@ const DESIGNS = {
           <input class="slider" id="slider" type="range" min="${config.min_minutes}" max="${config.max_minutes}" step="${config.step}" value="${init}" aria-label="Set minutes">
           <button class="step-btn" id="plus" aria-label="Increase time">+</button>
         </div>
-        <button class="start" id="start" aria-label="Start session"><ha-icon icon="mdi:play"></ha-icon><span id="startlbl">Start session</span></button>
         ${endsHtml(config)}
       </div>`;
     },
     wire(root, api, config) {
-      const els = grabEls(root, ["big", "fill", "dot", "slider", "minus", "plus", "start", "startlbl", "ends", "acd|.acd"]);
+      const els = grabEls(root, ["big", "fill", "dot", "slider", "minus", "plus", "ends", "acd|.acd"]);
       const cur = () => clampMinutes(Number(els.slider.value), config);
       const setVal = (m) => {
         els.slider.value = clampMinutes(m, config);
@@ -544,24 +547,15 @@ const DESIGNS = {
       els.minus.addEventListener("click", () => setVal(cur() - config.step));
       els.plus.addEventListener("click", () => setVal(cur() + config.step));
       els.slider.addEventListener("input", () => api.setValue(cur()));
-      els.start.addEventListener("click", () => {
-        if (api.isRunning()) api.pause();
-        else if (api.isPaused()) api.resume();
-        else api.commit(cur());
-      });
+      // Seed a pending value so the shared Start button is ready immediately.
+      api.setValue(cur());
       return els;
     },
     paint(els, snap, config) {
       els.acd.classList.toggle("pulse", snap.pulse);
       els.fill.style.width = `${snap.frac * 100}%`;
       els.dot.style.left = `${snap.frac * 100}%`;
-      // Keep the slider resting at its middle default until the user picks a
-      // value; only mirror snap.minutes once there's a pending selection.
       if (!snap.running && !snap.paused && snap.hasPending) els.slider.value = snap.minutes;
-      const running = snap.running;
-      els.startlbl.textContent = running ? "Pause session" : snap.paused ? "Resume" : "Start session";
-      els.start.querySelector("ha-icon").setAttribute("icon", running ? "mdi:pause" : "mdi:play");
-      els.start.setAttribute("aria-label", running ? "Pause session" : "Start session");
       paintShared(els, snap, config);
     },
   },
@@ -630,7 +624,10 @@ const BASE_STYLES = `
   .preset.sel { color:var(--act-accent); border-color:var(--act-accent);
     background:color-mix(in srgb, var(--act-accent) 14%, transparent); }
   .preset.sel .preset-u { color:var(--act-accent); }
-  .cancel-wrap { display:flex; justify-content:center; margin-top:16px; }
+  .controls-row { display:flex; justify-content:center; gap:10px; margin-top:16px; }
+  .btn-start { border:none; border-radius:14px; padding:10px 30px; font-weight:700; cursor:pointer; font-family:inherit;
+    color:#0B1020; background:linear-gradient(135deg, var(--act-accent-strong), var(--act-accent));
+    box-shadow:0 6px 16px var(--act-accent-glow); }
   .btn-cancel { border:1px solid var(--act-btn-border); border-radius:14px; padding:9px 28px; font-weight:600;
     cursor:pointer; font-family:inherit; background:transparent; color:var(--act-danger); }
   .hint { padding:26px 14px; text-align:center; font-size:.95rem; color:var(--act-text-2); }
@@ -697,7 +694,6 @@ class AcTimerCard extends HTMLElement {
     this._pendingMinutes = null;
     this._lastIdleMinutes = null;
     this._tickHandle = null;
-    this._eventUnsub = null;
   }
 
   setConfig(config) {
@@ -717,12 +713,16 @@ class AcTimerCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    // When the timer returns to idle (cancelled or finished), forget any pending
-    // value so the card resets to a clean zero instead of the last-set position.
+    // Detect the timer returning to idle. If it finished (not cancelled), run the
+    // finish action; either way, reset to a clean zero. Using the state change is
+    // reliable on every hass update, unlike the previous event subscription.
     const running = this._isActive() || this._isPaused();
-    if (this._wasRunning && !running && !this._adjusting) this._pendingMinutes = null;
+    if (this._wasRunning && !running) {
+      if (this._cancelling) this._cancelling = false;
+      else if (!this._adjusting) this._runFinishAction();
+      this._pendingMinutes = null;
+    }
     this._wasRunning = running;
-    this._maybeSubscribeFinish();
     this._updateView();
   }
   connectedCallback() {
@@ -730,34 +730,9 @@ class AcTimerCard extends HTMLElement {
   }
   disconnectedCallback() {
     this._stopTicking();
-    this._unsubscribeFinish();
   }
 
-  // ---- finish action ----
-  _hasFinish() {
-    return !!(this._config && (this._config.finish_entity || this._config.finish_action));
-  }
-  _maybeSubscribeFinish() {
-    if (this._eventUnsub) return;
-    if (!this._hasFinish()) return;
-    if (!this._hass || !this._hass.connection) return;
-    this._hass.connection
-      .subscribeEvents((ev) => {
-        if (ev.data && ev.data.entity_id === this._config.timer_entity) this._runFinishAction();
-      }, "timer.finished")
-      .then((unsub) => (this._eventUnsub = unsub))
-      .catch(() => {});
-  }
-  _unsubscribeFinish() {
-    if (this._eventUnsub) {
-      try {
-        this._eventUnsub();
-      } catch (e) {
-        /* ignore */
-      }
-      this._eventUnsub = null;
-    }
-  }
+  // ---- finish action (fires when the timer reaches idle from running) ----
   _runFinishAction() {
     // Simple path: a picked script / scene / automation entity.
     const ent = this._config.finish_entity;
@@ -891,7 +866,9 @@ class AcTimerCard extends HTMLElement {
           el.removeEventListener("pointermove", move);
           el.removeEventListener("pointerup", up);
           el.removeEventListener("pointercancel", up);
-          card._commit();
+          // Setting only — the user presses Start to begin the countdown.
+          card._adjusting = false;
+          card._updateView();
         };
         el.addEventListener("pointerdown", (ev) => {
           if (!card._canInteract()) return;
@@ -949,7 +926,18 @@ class AcTimerCard extends HTMLElement {
     });
   }
   _cancelTimer() {
+    this._cancelling = true; // so the finish action doesn't fire on this stop
     this._hass.callService("timer", "cancel", { entity_id: this._config.timer_entity });
+  }
+  // Cancel button: stop a running timer, or clear a pending (not-yet-started) value.
+  _onCancel() {
+    if (this._isActive() || this._isPaused()) {
+      this._cancelTimer();
+    } else {
+      this._pendingMinutes = null;
+      this._adjusting = false;
+      this._updateView();
+    }
   }
 
   // ---- render ----
@@ -962,7 +950,7 @@ class AcTimerCard extends HTMLElement {
         <div id="root">
           ${design.html(this._config)}
           ${presetsHtml(this._config)}
-          ${cancelHtml()}
+          ${controlsHtml()}
         </div>
       </ha-card>`;
     this._applyColors();
@@ -970,9 +958,11 @@ class AcTimerCard extends HTMLElement {
     this._rootWrap = this.shadowRoot.getElementById("root");
     this._designEls = design.wire(this.shadowRoot, this._makeApi(), this._config);
 
-    // Shared, design-agnostic controls: favorite-time presets + cancel.
+    // Shared, design-agnostic controls: favorite presets + Start + Cancel.
+    this._startEl = this.shadowRoot.getElementById("start");
+    if (this._startEl) this._startEl.addEventListener("click", () => this._commit());
     this._cancelEl = this.shadowRoot.getElementById("cancel");
-    if (this._cancelEl) this._cancelEl.addEventListener("click", () => this._cancelTimer());
+    if (this._cancelEl) this._cancelEl.addEventListener("click", () => this._onCancel());
     this._presetEls = Array.from(this.shadowRoot.querySelectorAll(".preset"));
     for (const b of this._presetEls) {
       b.addEventListener("click", () => {
@@ -1001,7 +991,7 @@ class AcTimerCard extends HTMLElement {
     this._rootWrap.style.display = "none";
   }
   _updateView() {
-    if (!this._design || !this._hintEl) return;
+    if (!this._design || !this._hintEl || !this._designEls) return;
     if (!this._config.timer_entity) {
       this._showHint("Open the card editor and set a Timer entity to finish setup.");
       return;
@@ -1021,10 +1011,14 @@ class AcTimerCard extends HTMLElement {
     }
     this._design.paint(this._designEls, snap, this._config);
 
-    // Shared controls: cancel visibility + highlight the active favorite.
-    if (this._cancelEl) this._cancelEl.style.display = snap.running || snap.paused ? "" : "none";
+    // Shared controls. Start shows once a value is set (and not running);
+    // Cancel shows while running or when there's a value to clear.
+    const running = snap.running || snap.paused;
+    const hasPending = this._pendingMinutes != null;
+    if (this._startEl) this._startEl.style.display = !running && hasPending ? "" : "none";
+    if (this._cancelEl) this._cancelEl.style.display = running || hasPending ? "" : "none";
     if (this._presetEls && this._presetEls.length) {
-      const activeMin = snap.running || snap.paused ? Math.round(this._configuredSeconds() / 60) : null;
+      const activeMin = running ? Math.round(this._configuredSeconds() / 60) : null;
       for (const b of this._presetEls) {
         b.classList.toggle("sel", activeMin != null && Number(b.dataset.min) === activeMin);
       }
