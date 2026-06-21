@@ -48,9 +48,41 @@ Instead of fixed 30 / 45 / 60-minute buttons, you just **drag the bar to any dur
 
 ### Set up
 
-1. Create a **Timer** helper: *Settings → Devices & Services → Helpers → Create Helper → Timer* (e.g. `timer.ac_off`).
-2. Edit your dashboard → **Add Card → AC Timer Card**.
-3. In the editor, set the **Timer entity**, pick **Run on finish** (your off script / scene / automation), and tweak the look.
+1. **Timer helper** — create one at *Settings → Devices & Services → Helpers → Create Helper → Timer* (e.g. `timer.ac_off`). The card's editor also tries to create one for you automatically when you add it.
+2. **Add the card** — edit your dashboard → **Add Card → AC Timer Card** → set the **Timer entity** and tweak the look.
+3. **The finish action** — see below. ⬇️
+
+### Run something when the timer ends (important)
+
+The card's countdown runs **server-side**, but *what happens when it ends* needs to be set up once. There are two ways:
+
+#### ✅ Recommended — a server-side automation (works even when no dashboard is open)
+
+Use this for anything that **must** happen reliably (like turning the AC off at night). Import the ready-made blueprint and just pick your **Timer** and your **action**:
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Flididx%2FAC-Timer-For-HA%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fac_timer_off.yaml)
+
+Or add the automation by hand (*Settings → Automations → Create → Edit in YAML*):
+
+```yaml
+alias: AC Timer — run action when timer finishes
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ac_off        # 👈 your timer
+actions:
+  - action: script.turn_on
+    target:
+      entity_id: script.ac_turn_off  # 👈 your off script / scene / automation
+mode: single
+```
+
+#### ⚡ Quick (optional) — the card's "Run on finish"
+
+The card also has a **Run on finish** field that fires your action client-side. It's instant to set up, **but it only works while a dashboard is open in a browser** — so it will *not* fire if everyone's app is closed (e.g. overnight). Fine for non-critical uses; for anything important, use the automation above.
+
+> Use **one** of the two, not both, to avoid running your action twice.
 
 ---
 

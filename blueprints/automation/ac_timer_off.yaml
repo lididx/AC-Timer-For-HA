@@ -1,0 +1,37 @@
+blueprint:
+  name: AC Timer — run an action when the timer finishes
+  description: >
+    Companion automation for the **AC Timer For HA** card.
+
+    It runs your chosen action (for example, a script that turns the AC off)
+    when the timer reaches zero — **on the server**, so it works even when no
+    dashboard is open (e.g. at night). This is the reliable way to run the
+    finish action; the card's own "Run on finish" only fires while a dashboard
+    is open in a browser.
+  domain: automation
+  source_url: https://github.com/lididx/AC-Timer-For-HA/blob/main/blueprints/automation/ac_timer_off.yaml
+  input:
+    timer_entity:
+      name: Timer
+      description: The timer entity the card controls (e.g. timer.ac_off).
+      selector:
+        entity:
+          filter:
+            - domain: timer
+    finish_action:
+      name: Action on finish
+      description: >
+        What to run when the timer ends — typically your AC-off script
+        (Perform action → script.turn_on → your script), a scene, or any action.
+      selector:
+        action: {}
+
+mode: single
+
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input timer_entity
+
+actions: !input finish_action

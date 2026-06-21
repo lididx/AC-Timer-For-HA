@@ -1,22 +1,22 @@
 # ─────────────────────────────────────────────────────────────
-# Optional server-side automation — runs the finish action even when no
-# dashboard is open. Use this INSTEAD of the card's `finish_action` if you
-# need guaranteed, exactly-once execution regardless of any open client.
+# Server-side automation — runs the finish action when the timer ends, even
+# when no dashboard is open (e.g. at night). This is the RELIABLE way to run
+# your finish action; the card's own "Run on finish" only fires while a
+# dashboard is open in a browser.
 #
-# Add via Settings -> Automations -> ⋮ -> Edit in YAML, or paste into
-# automations.yaml. Replace the script entity_id with your own.
+# Easiest: import the blueprint instead — blueprints/automation/ac_timer_off.yaml
+# Or add this by hand via Settings -> Automations -> Create -> Edit in YAML.
+# Replace the timer and script entity_ids with your own.
 # ─────────────────────────────────────────────────────────────
 
-- id: ac_timer_finished
-  alias: "AC Timer — run action on finish"
-  trigger:
-    - platform: event
-      event_type: timer.finished
-      event_data:
-        entity_id: timer.ac_off
-  action:
-    # 👉 Replace with your own script/scene/automation.
-    - service: script.turn_on
-      target:
-        entity_id: script.your_off_script
-  mode: single
+alias: "AC Timer — run action when timer finishes"
+mode: single
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ac_off          # 👈 your timer
+actions:
+  - action: script.turn_on
+    target:
+      entity_id: script.ac_turn_off    # 👈 your off script / scene / automation
