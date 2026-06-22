@@ -17,7 +17,7 @@
  * Created by Lidor Nahum. No build step required (plain custom element).
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
 
 const DEFAULT_CONFIG = {
   design: "bar",
